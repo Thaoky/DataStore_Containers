@@ -1,0 +1,18 @@
+DataStore Changelog (dates in dd/mm/yyyy)
+===================
+
+
+Version 2023.11.20 (20/11/2023)
+
+- Fixed COMMON_NUM_BAG_SLOTS to be NUM_BAG_SLOTS + 1 for retail, and NUM_BAG_SLOTS for non-retail, instead of the opposite.
+
+Version 2023.11.17 (17/11/2023)
+
+- Removed the WOW_PROJECT_ID test in ScanBankSlotsInfo()
+- Removed an invalid test when closing a bank frame.
+
+Version 2023.11.14 (14/11/2023)
+
+- As of this version, this DataStore module will be released in a single package compatible with all versions of the game.
+- As of this version, the version number will no longer be 1.x or 9.x, but rather a date that clearly identifies when the release took place.
+
