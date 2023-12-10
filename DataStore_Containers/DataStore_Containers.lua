@@ -765,7 +765,9 @@ local function _GetContainerItemCount(character, searchedID)
 					bagCount = bagCount + itemCount
 				elseif (containerName == "Bag-3") then
 					reagentBankCount = reagentBankCount + itemCount
-				elseif (containerName == "Bag5") then -- Reagent Bag
+					
+				-- Bag5 is the reagent bag in retail, but 1st bank bag in classic & LKj
+				elseif (containerName == "Bag5") and WOW_PROJECT_ID == WOW_PROJECT_MAINLINE then -- Reagent Bag
 					reagentBagCount = reagentBagCount + itemCount
 				else
 					local bagNum = tonumber(string.sub(containerName, 4))
