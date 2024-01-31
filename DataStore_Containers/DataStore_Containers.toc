@@ -1,10 +1,10 @@
-## Interface: 100200
+## Interface: 100205
 ## Title: DataStore_Containers
 ## IconTexture: Interface\Icons\garrison_building_storehouse
 
 ## Notes: Stores information about character bags, bank, and guild banks
 ## Author: Thaoky (EU-Marécages de Zangar)
-## Version: 2023.11.17
+## Version: 2024.01.31
 ## Dependencies: DataStore
 ## OptionalDeps: Ace3
 ## SavedVariables: DataStore_ContainersDB
