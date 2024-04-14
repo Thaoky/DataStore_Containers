@@ -10,218 +10,25 @@ Extended services:
 --]]
 if not DataStore then return end
 
-local addonName = "DataStore_Containers"
+local addonName, addon = ...
+local thisCharacter
+local thisCharacterBank
 
-_G[addonName] = LibStub("AceAddon-3.0"):NewAddon(addonName, "AceConsole-3.0", "AceEvent-3.0", "AceComm-3.0", "AceSerializer-3.0")
+local DataStore, tonumber, wipe, type, time, C_Container = DataStore, tonumber, wipe, type, time, C_Container
+local GetTime, GetInventoryItemTexture, GetInventoryItemLink, GetItemInfo, GetItemSubClassInfo = GetTime, GetInventoryItemTexture, GetInventoryItemLink, GetItemInfo, GetItemSubClassInfo
+local log = math.log
+local isRetail = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
 
-local addon = _G[addonName]
-
-local commPrefix = "DS_Cont"		-- let's keep it a bit shorter than the addon name, this goes on a comm channel, a byte is a byte ffs :p
-local MAIN_BANK_SLOTS = 100		-- bag id of the 28 main bank slots
+local enum = DataStore.Enum.ContainerIDs
+local bit64 = LibStub("LibBit64")
 
 -- Constants usable for all versions
-local COMMON_NUM_BAG_SLOTS = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE) and NUM_BAG_SLOTS + 1 or NUM_BAG_SLOTS
-local MIN_BANK_SLOT = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE) and 6 or 5		-- Bags 6 - 12 are Bank as of 10.0
-local MAX_BANK_SLOT = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE) and 12 or 11
+local COMMON_NUM_BAG_SLOTS = isRetail and NUM_BAG_SLOTS + 1 or NUM_BAG_SLOTS
+local MIN_BANK_SLOT = isRetail and 6 or 5		-- Bags 6 - 12 are Bank as of 10.0
+local MAX_BANK_SLOT = isRetail and 12 or 11
 
-local guildMembers = {} 	-- hash table containing guild member info (tab timestamps)
-
--- Message types
-local MSG_SEND_BANK_TIMESTAMPS				= 1	-- broacast at login
-local MSG_BANK_TIMESTAMPS_REPLY				= 2	-- reply to someone else's login
-local MSG_BANKTAB_REQUEST						= 3	-- request bank tab data ..
-local MSG_BANKTAB_REQUEST_ACK					= 4	-- .. ack the request, tell the requester to wait
-local MSG_BANKTAB_REQUEST_REJECTED			= 5	-- .. refuse the request
-local MSG_BANKTAB_TRANSFER						= 6	-- .. or send the data
-
-local VOID_STORAGE_TAB = "VoidStorage.Tab"
-
-local AddonDB_Defaults = {
-	global = {
-		Guilds = {
-			['*'] = {			-- ["Account.Realm.Name"] 
-				money = nil,
-				faction = nil,
-				Tabs = {
-					['*'] = {		-- tabID = table index [1] to [6]
-						name = nil,
-						icon = nil,
-						visitedBy = "",
-						ClientTime = 0,				-- since epoch
-						ClientDate = nil,
-						ClientHour = nil,
-						ClientMinute = nil,
-						ServerHour = nil,
-						ServerMinute = nil,
-						ids = {},
-						links = {},
-						counts = {}
-					}
-				},
-			}
-		},
-		Characters = {
-			['*'] = {					-- ["Account.Realm.Name"] 
-				lastUpdate = nil,
-				numBagSlots = 0,
-				numFreeBagSlots = 0,
-				numBankSlots = 0,
-				numPurchasedBankSlots = nil,		-- nil = never visited, keep this to distinguish from 0 actually purchased
-				numFreeBankSlots = 0,
-				bankType = 0,					-- alt is a bank type (flags)
-				Containers = {
-					['*'] = {					-- Containers["Bag0"]
-						icon = nil,				-- Containers's texture
-						link = nil,				-- Containers's itemlink
-						size = 0,
-						freeslots = 0,
-						bagtype = 0,
-						ids = {},
-						links = {},
-						counts = {},
-						cooldowns = {}
-					}
-				},
-				Keystone = {},
-			}
-		}
-	}
-}
 
 -- *** Utility functions ***
-local bAnd = bit.band
-local bOr = bit.bor
-local bXOr = bit.bxor
-
-local TestBit = DataStore.TestBit
-
-local function GetThisGuild()
-	local key = DataStore:GetThisGuildKey()
-	return key and addon.db.global.Guilds[key] 
-end
-
-local function GetBankTimestamps(guild)
-	-- returns a | delimited string containing the list of alts in the same guild
-	guild = guild or GetGuildInfo("player")
-	if not guild then	return end
-		
-	local thisGuild = GetThisGuild()
-	if not thisGuild then return end
-	
-	local out = {}
-	for tabID, tab in pairs(thisGuild.Tabs) do
-		if tab.name then
-			table.insert(out, format("%d:%s:%d:%d:%d", tabID, tab.name, tab.ClientTime, tab.ServerHour, tab.ServerMinute))
-		end
-	end
-	
-	return table.concat(out, "|")
-end
-
-local function SaveBankTimestamps(sender, timestamps)
-	if not timestamps or strlen(timestamps) == 0 then return end	-- sender has no tabs
-	
-	guildMembers[sender] = guildMembers[sender] or {}
-	wipe(guildMembers[sender])
-
-	for _, v in pairs( { strsplit("|", timestamps) }) do	
-		local id, name, clientTime, serverHour, serverMinute = strsplit(":", v)
-
-		-- ex: guildMembers["Thaoky"]["RaidFood"] = {	clientTime = 123, serverHour = ... }
-		guildMembers[sender][name] = {}
-		local tab = guildMembers[sender][name]
-		tab.id = tonumber(id)
-		tab.clientTime = tonumber(clientTime)
-		tab.serverHour = tonumber(serverHour)
-		tab.serverMinute = tonumber(serverMinute)
-	end
-	addon:SendMessage("DATASTORE_GUILD_BANKTABS_UPDATED", sender)
-end
-
-local function GuildBroadcast(messageType, ...)
-	local serializedData = addon:Serialize(messageType, ...)
-	addon:SendCommMessage(commPrefix, serializedData, "GUILD")
-end
-
-local function GuildWhisper(player, messageType, ...)
-	if DataStore:IsGuildMemberOnline(player) then
-		local serializedData = addon:Serialize(messageType, ...)
-		addon:SendCommMessage(commPrefix, serializedData, "WHISPER", player)
-	end
-end
-
-local function IsEnchanted(link)
-	if not link then return end
-	
-	if not string.find(link, "item:%d+:0:0:0:0:0:0:%d+:%d+:0:0") then	-- 7th is the UniqueID, 8th LinkLevel which are irrelevant
-		-- enchants/jewels store values instead of zeroes in the link, if this string can't be found, there's at least one enchant/jewel
-		return true
-	end
-end
-
-local BAGS			= 1		-- All bags, 0 to 12, and keyring ( id -2 )
-local BANK			= 2		-- 28 main slots
-local GUILDBANK	= 3		-- 98 main slots
-
-local ContainerTypes = {
-	[BAGS] = {
-		GetSize = function(self, bagID)
-				return C_Container.GetContainerNumSlots(bagID)
-			end,
-		GetFreeSlots = function(self, bagID)
-				local freeSlots, bagType = C_Container.GetContainerNumFreeSlots(bagID)
-				return freeSlots, bagType
-			end,
-		GetLink = function(self, slotID, bagID)
-				return C_Container.GetContainerItemLink(bagID, slotID)
-			end,
-		GetCount = function(self, slotID, bagID)
-				return C_Container.GetContainerItemInfo(bagID, slotID).stackCount
-			end,
-		GetCooldown = function(self, slotID, bagID)
-				local startTime, duration, isEnabled = C_Container.GetContainerItemCooldown(bagID, slotID)
-				return startTime, duration, isEnabled
-			end,
-	},
-	[BANK] = {
-		GetSize = function(self)
-				return NUM_BANKGENERIC_SLOTS or 28		-- hardcoded in case the constant is not set
-			end,
-		GetFreeSlots = function(self)
-				local freeSlots, bagType = C_Container.GetContainerNumFreeSlots(-1)		-- -1 = player bank
-				return freeSlots, bagType
-			end,
-		GetLink = function(self, slotID)
-				return C_Container.GetContainerItemLink(-1, slotID)
-			end,
-		GetCount = function(self, slotID)
-				return C_Container.GetContainerItemInfo(-1, slotID).stackCount
-			end,
-		GetCooldown = function(self, slotID)
-				local startTime, duration, isEnabled = GetInventoryItemCooldown("player", slotID)
-				return startTime, duration, isEnabled
-			end,
-	},
-	[GUILDBANK] = {
-		GetSize = function(self)
-				return MAX_GUILDBANK_SLOTS_PER_TAB or 98		-- hardcoded in case the constant is not set
-			end,
-		GetFreeSlots = function(self)
-				return nil, nil
-			end,
-		GetLink = function(self, slotID, tabID)
-				return GetGuildBankItemLink(tabID, slotID)
-			end,
-		GetCount = function(self, slotID, tabID)
-				local _, count = GetGuildBankItemInfo(tabID, slotID)
-				return count
-			end,
-		GetCooldown = function(self, slotID)
-				return nil
-			end,
-	}
-}
-
 local function GetRemainingCooldown(start)
    local uptime = GetTime()
    
@@ -231,245 +38,176 @@ local function GetRemainingCooldown(start)
    
    return -uptime - ((2 ^ 32) / 1000 - start)
 end
--- *** Scanning functions ***
-local function ScanContainer(bagID, containerType)
-	if not bagID then return end
-	
-	local Container = ContainerTypes[containerType]
-	
-	local bag
-	if containerType == GUILDBANK then
-		local thisGuild = GetThisGuild()
-		if not thisGuild then return end
-	
-		bag = thisGuild.Tabs[bagID]	-- bag is actually the current tab
-	else
-		bag = addon.ThisCharacter.Containers["Bag" .. bagID]
-		wipe(bag.cooldowns)		-- does not exist for a guild bank
-	end
 
-	wipe(bag.ids)				-- clean existing bag data
-	wipe(bag.counts)
-	wipe(bag.links)
+local function GetContainer(bagID)
+	local char = thisCharacter
+	local bag = char.Containers[bagID]
 	
-	local link, count
+	-- if the bag does not exist yet, create it
+	if not bag then
+		char.Containers[bagID] = {}
+		bag = char.Containers[bagID]
+		
+		bag.links = {}
+		bag.items = {}
+	end
+	
+	return bag
+end
+
+local function GetCooldownIndex(bagID, slotID)
+	return (bagID * 1000) + slotID
+end
+
+local function Log2(n)
+	-- which power of 2 is this number ? ex: 1024 is 2 ^ 10 => return 10
+   return log(n) / log(2)
+end
+
+-- *** Scanning functions ***
+local function ScanContainer(bagID, bagSize)
+	local bag = GetContainer(bagID)
+
+	wipe(bag.items)
+	wipe(bag.links)
+
+	local link, itemID
 	local startTime, duration, isEnabled
 	
-	bag.size = Container:GetSize(bagID)
-	bag.freeslots, bag.bagtype = Container:GetFreeSlots(bagID)
-	
-	-- Scan from 1 to bagsize for normal bags or guild bank tabs, but from 40 to 67 for main bank slots
-	-- local baseIndex = (containerType == BANK) and 39 or 0
-	local baseIndex = 0
-	local index
-	
-	for slotID = baseIndex + 1, baseIndex + bag.size do
-		index = slotID - baseIndex
-		link = Container:GetLink(slotID, bagID)
+	for slotID = 1, bagSize do
+		link = C_Container.GetContainerItemLink(bagID, slotID)
 		
 		if link then
-			bag.ids[index] = tonumber(link:match("item:(%d+)"))
+			itemID = tonumber(link:match("item:(%d+)"))
 
 			if link:match("|Hkeystone:") then
 				-- mythic keystones are actually all using the same item id
-				bag.ids[index] = 138019
+				-- https://wowpedia.fandom.com/wiki/KeystoneString
+				itemID = 138019
 
 			elseif link:match("|Hbattlepet:") then
 				-- special treatment for battle pets, save texture id instead of item id..
 				-- texture, itemCount, locked, quality, readable, _, _, isFiltered, noValue, itemID = GetContainerItemInfo(id, itemButton:GetID());
 				
-				-- 20/11/2022 : temporary hack, blizzard changed the main bank id from 100 to -1
-				-- Changing the code everywhere to support -1 is feasible, but would require the users to reload the data.
-				-- When I have time to fix this hack, I'll make it transparent for users.
-				local actualBagID = (bagID == MAIN_BANK_SLOTS) and -1 or bagID
-				
-				local info = C_Container.GetContainerItemInfo(actualBagID, slotID)
-				bag.ids[index] = info.iconFileID
+				local info = C_Container.GetContainerItemInfo(bagID, slotID)
+				itemID = info.iconFileID
 			end
 			
-			if IsEnchanted(link) then
-				bag.links[index] = link
-			end
+			bag.links[slotID] = link
 		
-			count = Container:GetCount(slotID, bagID)
-			if count and count > 1  then
-				bag.counts[index] = count	-- only save the count if it's > 1 (to save some space since a count of 1 is extremely redundant)
-			end
+			-- bits 0-9 : item count (10 bits, up to 1024)
+			bag.items[slotID] = C_Container.GetContainerItemInfo(bagID, slotID).stackCount
+				+ bit64:LeftShift(itemID, 10)		-- bits 10+ : item ID
 		end
 		
-		startTime, duration, isEnabled = Container:GetCooldown(slotID, bagID)
+		startTime, duration, isEnabled = C_Container.GetContainerItemCooldown(bagID, slotID)
+		
 		if startTime and startTime > 0 then
-			if WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE then
+			if not isRetail then
 				startTime = time() + GetRemainingCooldown(startTime)
 			end
-		
-			bag.cooldowns[index] = format("%s|%s|1", startTime, duration)
+
+			thisCharacter.Cooldowns[GetCooldownIndex(bagID, slotID)] = { startTime = startTime, duration = duration }
+		else
+			thisCharacter.Cooldowns[GetCooldownIndex(bagID, slotID)] = nil
 		end
 	end
 	
-	addon.ThisCharacter.lastUpdate = time()
-	addon:SendMessage("DATASTORE_CONTAINER_UPDATED", bagID, containerType)
+	thisCharacter.lastUpdate = time()
+	DataStore:Broadcast("DATASTORE_CONTAINER_UPDATED", bagID, containerType)
 end
 
 local function ScanBagSlotsInfo()
-	local char = addon.ThisCharacter
+	local char = thisCharacter
 
-	local numBagSlots = 0
-	local numFreeBagSlots = 0
+	local numSlots = 0
+	local freeSlots = 0
 
 	for bagID = 0, COMMON_NUM_BAG_SLOTS, 1 do -- 5 Slots to include Reagent Bag
-		local bag = char.Containers["Bag" .. bagID]
-		numBagSlots = numBagSlots + bag.size
-		numFreeBagSlots = numFreeBagSlots + bag.freeslots
+		local bag = GetContainer(bagID)
+		local info = bag.info or 0
+		
+		numSlots = numSlots + bit64:GetBits(info, 3, 6)		-- bits 3-8 : bag size
+		freeSlots = freeSlots + bit64:GetBits(info, 9, 6)		-- bits 9-14 : number of free slots in this bag
 	end
 	
-	char.numBagSlots = numBagSlots
-	char.numFreeBagSlots = numFreeBagSlots
+	char.bagInfo = numSlots								-- bits 0-9 : num bag slots
+				+ bit64:LeftShift(freeSlots, 10)		-- bits 10+ : num free slots
 end
 
 local function ScanBankSlotsInfo()
-	local char = addon.ThisCharacter
+	local char = thisCharacter
 	
-	local numBankSlots = NUM_BANKGENERIC_SLOTS
-	local numFreeBankSlots = char.Containers["Bag"..MAIN_BANK_SLOTS].freeslots
+	local numSlots = NUM_BANKGENERIC_SLOTS
+	-- local freeSlots = thisCharacterBank.freeslots
+	local freeSlots = C_Container.GetContainerNumFreeSlots(-1)
 
 	for bagID = COMMON_NUM_BAG_SLOTS + 1, COMMON_NUM_BAG_SLOTS + NUM_BANKBAGSLOTS do -- 6 to 12
-		local bag = char.Containers["Bag" .. bagID]
+		local bag = GetContainer(bagID)
 		
-		numBankSlots = numBankSlots + bag.size
-		numFreeBankSlots = numFreeBankSlots + bag.freeslots
+		numSlots = numSlots + bit64:GetBits(bag.info, 3, 6)		-- bits 3-8 : bag size
+		freeSlots = freeSlots + bit64:GetBits(bag.info, 9, 6)		-- bits 9-14 : number of free slots in this bag
 	end
-	
-	char.numBankSlots = numBankSlots
-	char.numFreeBankSlots = numFreeBankSlots
 	
 	local numPurchasedSlots, isFull = GetNumBankSlots()
-	char.numPurchasedBankSlots = numPurchasedSlots
-end
-
-local function ScanGuildBankInfo()
-	-- only the current tab can be updated
-	local thisGuild = GetThisGuild()
-	if not thisGuild then return end
 	
-	local tabID = GetCurrentGuildBankTab()
-	local t = thisGuild.Tabs[tabID]	-- t = current tab
-
-	t.name, t.icon = GetGuildBankTabInfo(tabID)
-	t.visitedBy = UnitName("player")
-	t.ClientTime = time()
-	if GetLocale() == "enUS" then				-- adjust this test if there's demand
-		t.ClientDate = date("%m/%d/%Y")
-	else
-		t.ClientDate = date("%d/%m/%Y")
-	end
-	t.ClientHour = tonumber(date("%H"))
-	t.ClientMinute = tonumber(date("%M"))
-	t.ServerHour, t.ServerMinute = GetGameTime()
+	char.bankInfo = numSlots										-- bits 0-9 : num bag slots
+				+ bit64:LeftShift(freeSlots, 10)					-- bits 10-19 : num free slots
+				+ bit64:LeftShift(numPurchasedSlots, 20)		-- bits 20+ : num purchased
 end
 
 local function ScanBag(bagID)
-	if (bagID < 0) and (bagID ~= -2) then return end
+	-- https://wowpedia.fandom.com/wiki/BagID
 
-	local char = addon.ThisCharacter
-	local bag = char.Containers["Bag" .. bagID]
+	local bag = GetContainer(bagID)
+	local rarity, icon
 	
-	if bagID == 0 then	-- Bag 0	
-		bag.icon = "Interface\\Buttons\\Button-Backpack-Up"
-		bag.link = nil
-	elseif bagID == -2 then
-		bag.icon = "ICONS\\INV_Misc_Key_04.blp"
-		bag.link = nil	 
-	else						-- Bags 1 through 12
-		bag.icon = GetInventoryItemTexture("player", C_Container.ContainerIDToInventoryID(bagID))
-		bag.link = GetInventoryItemLink("player", C_Container.ContainerIDToInventoryID(bagID))
-		
-		if bag.link then
-			local _, _, rarity = GetItemInfo(bag.link)
-			if rarity then	-- in case rarity was known from a previous scan, and GetItemInfo returns nil for some reason .. don't overwrite
-				bag.rarity = rarity
-			end
-		else
-			-- 10.0, due to the shift in bag id's, be sure the old rarity is not preserved for alts who do not have a reagent bag yet
-			bag.rarity = nil
-		end
+	local icon = bagID > 0 and GetInventoryItemTexture("player", C_Container.ContainerIDToInventoryID(bagID))
+	bag.link = bagID > 0 and GetInventoryItemLink("player", C_Container.ContainerIDToInventoryID(bagID))
+	local rarity = bag.link and select(3, GetItemInfo(bag.link))
+	local size = C_Container.GetContainerNumSlots(bagID)
+	
+	-- https://wowpedia.fandom.com/wiki/API_GetContainerNumFreeSlots
+	local freeSlots, bagType = C_Container.GetContainerNumFreeSlots(bagID)
+	
+	-- https://wowpedia.fandom.com/wiki/ItemFamily
+	-- bag type will be 1024 for a mining bag for instance, it's just bit 11 in the item family (2^bit-1)
+	-- we'll just save 10 using the Log2
+	
+	if bagType and bagType > 0 then
+		bagType = Log2(bagType)
 	end
 	
-	ScanContainer(bagID, BAGS)
+	bag.info = (rarity or 0)						-- bits 0-2 : rarity
+		+ bit64:LeftShift(size, 3)					-- bits 3-8 : bag size
+		+ bit64:LeftShift(freeSlots, 9)			-- bits 9-14 : number of free slots in this bag
+		+ bit64:LeftShift(bagType or 0, 15)		-- bits 15-19 : 5 bits, 32 values (from 4 to 27 in 10.x) for the bag type
+		+ bit64:LeftShift(icon or 0, 20)			-- bits 20+ : icon id
+	
+	ScanContainer(bagID, size)
 	ScanBagSlotsInfo()
 end
 
-local function ScanVoidStorage()
-	-- delete the old data from the "VoidStorage" container, now stored in .Tab1, .Tab2 (since they'll likely add more later on)
-	wipe(addon.ThisCharacter.Containers["VoidStorage"])
-
-	local bag
-	local itemID
-	
-	for tab = 1, 2 do
-		bag = addon.ThisCharacter.Containers[VOID_STORAGE_TAB .. tab]
-		bag.size = 80
-	
-		for slot = 1, bag.size do
-			itemID = GetVoidItemInfo(tab, slot)
-			bag.ids[slot] = itemID
-		end
-	end
-	addon:SendMessage("DATASTORE_VOIDSTORAGE_UPDATED")
-end
-
-local function ScanReagentBank()
-	if REAGENTBANK_CONTAINER then
-		ScanContainer(REAGENTBANK_CONTAINER, BAGS)
-	end
-end
-
-local function ScanKeystoneInfo()
-	local char = addon.ThisCharacter
-	wipe(char.Keystone)
-	
-   local mapID = C_MythicPlus.GetOwnedKeystoneChallengeMapID()
-	if not mapID then return end
-
-	local keyName, _, _, texture = C_ChallengeMode.GetMapUIInfo(mapID)
-	
-	local keyInfo = char.Keystone
-	keyInfo.name = keyName
-	keyInfo.level = C_MythicPlus.GetOwnedKeystoneLevel()
-	keyInfo.texture = texture
-	
-	char.lastUpdate = time()
-end
 
 -- *** Event Handlers ***
-local function OnPlayerAlive()
-	ScanKeystoneInfo()
-end
-
-local function OnWeeklyRewardsUpdate()
-	ScanKeystoneInfo()
-end
+local isBankOpen
 
 local function OnBagUpdate(event, bag)
 	-- if we get an update for a bank bag but the bank is not open, exit
-	if (bag >= MIN_BANK_SLOT) and (bag <= MAX_BANK_SLOT) and not addon.isBankOpen then
+	if (bag >= MIN_BANK_SLOT) and (bag <= MAX_BANK_SLOT) and not isBankOpen then
 		return
 	end
 
-	-- -2 for the keyring in non-retail
-	if (bag == -2) or (bag >= 0) then
+	if (bag == enum.Keyring) or (bag >= 0) then
 		ScanBag(bag)
 	end
-	
-	if WOW_PROJECT_ID == WOW_PROJECT_MAINLINE then
-		ScanKeystoneInfo()
-	end
+
 end
 
 local function OnBankFrameClosed()
-	addon.isBankOpen = nil
-	addon:UnregisterEvent("BANKFRAME_CLOSED")
-	addon:UnregisterEvent("PLAYERBANKSLOTS_CHANGED")
+	isBankOpen = nil
+	addon:StopListeningTo("BANKFRAME_CLOSED")
+	addon:StopListeningTo("PLAYERBANKSLOTS_CHANGED")
 end
 
 local function OnPlayerBankSlotsChanged(event, slotID)
@@ -477,157 +215,50 @@ local function OnPlayerBankSlotsChanged(event, slotID)
 	if (slotID >= 29) and (slotID <= 35) then
 		ScanBag(slotID - (35 - MAX_BANK_SLOT))		-- correction will be -23 in retail or -24 in LK
 	else
-		ScanContainer(MAIN_BANK_SLOTS, BANK)
 		ScanBankSlotsInfo()
 	end
 end
 
-local function OnPlayerReagentBankSlotsChanged(event, slotID)
-	-- This event does not work in a consistent way.
-	-- When triggered after crafting an item that uses reagents from the reagent bank, it is possible to properly read the container info.
-	-- When triggered after validating a quest that uses reagents from the reagent bank, then C_Container.GetContainerItemInfo returns nil
-	
-	local bag = addon.ThisCharacter.Containers["Bag-3"]
-	if not bag then return end
-		
-	-- Get the info for that slot
-	local info = C_Container.GetContainerItemInfo(-3, slotID)
-	
-	-- Will work for crafts, but not for quest validation, leaving an invalid count. (at least in 10.0.002)
-	if info then
-		bag.ids[slotID] = info.itemID
-	
-		if info.stackCount and info.stackCount	> 1 then 
-	
-			-- only save the count if it's > 1 (to save some space since a count of 1 is extremely redundant)
-			bag.counts[slotID] = info.stackCount
-		else
-			-- otherwise be sure to invalidate the previous count
-			bag.counts[slotID] = nil
-		end
-	else
-	
-		-- the only ugly possible workaround : if info is nil (which it should not be when turning in a quest), then clear that slot.
-		bag.ids[slotID] = nil
-		bag.counts[slotID] = nil
-	end
-end
-
 local function OnBankFrameOpened()
-	addon.isBankOpen = true
+	isBankOpen = true
 	for bagID = COMMON_NUM_BAG_SLOTS + 1, COMMON_NUM_BAG_SLOTS + NUM_BANKBAGSLOTS do -- 5 to 11 or 6 to 12 in retail
 		ScanBag(bagID)
 	end
 	
-	ScanContainer(MAIN_BANK_SLOTS, BANK)
 	ScanBankSlotsInfo()
-	addon:RegisterEvent("BANKFRAME_CLOSED", OnBankFrameClosed)
-	addon:RegisterEvent("PLAYERBANKSLOTS_CHANGED", OnPlayerBankSlotsChanged)
-end
-
-local function OnGuildBankFrameClosed()
-	-- if WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC or WOW_PROJECT_ID == WOW_PROJECT_WRATH_CLASSIC then
-		-- addon:UnregisterEvent("GUILDBANKFRAME_CLOSED")
-	-- end
-	addon:UnregisterEvent("GUILDBANKBAGSLOTS_CHANGED")
-	
-	local guildName = GetGuildInfo("player")
-	if guildName then
-		GuildBroadcast(MSG_SEND_BANK_TIMESTAMPS, GetBankTimestamps(guildName))
-	end
-end
-
-local function OnGuildBankBagSlotsChanged()
-	ScanContainer(GetCurrentGuildBankTab(), GUILDBANK)
-	ScanGuildBankInfo()
-end
-
-local function OnGuildBankFrameOpened()
-	
-	-- if WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC or WOW_PROJECT_ID == WOW_PROJECT_WRATH_CLASSIC then
-		-- addon:RegisterEvent("GUILDBANKFRAME_CLOSED", OnGuildBankFrameClosed)
-	-- end
-	
-	addon:RegisterEvent("GUILDBANKBAGSLOTS_CHANGED", OnGuildBankBagSlotsChanged)
-	
-	local thisGuild = GetThisGuild()
-	if thisGuild then
-		thisGuild.money = GetGuildBankMoney()
-		thisGuild.faction = UnitFactionGroup("player")
-	end
+	addon:ListenTo("BANKFRAME_CLOSED", OnBankFrameClosed)
+	addon:ListenTo("PLAYERBANKSLOTS_CHANGED", OnPlayerBankSlotsChanged)
 end
 
 local function OnAuctionMultiSellStart()
 	-- if a multi sell starts, unregister bag updates.
-	addon:UnregisterEvent("BAG_UPDATE")
+	addon:StopListeningTo("BAG_UPDATE")
 end
 
 local function OnAuctionMultiSellUpdate(event, current, total)
 	if current == total then	-- ex: multisell = 8 items, if we're on the 8th, resume bag updates.
-		addon:RegisterEvent("BAG_UPDATE", OnBagUpdate)
+		addon:ListenTo("BAG_UPDATE", OnBagUpdate)
 	end
 end
 
 local function OnAuctionHouseClosed()
-	addon:UnregisterEvent("AUCTION_MULTISELL_START")
-	addon:UnregisterEvent("AUCTION_MULTISELL_UPDATE")
-	addon:UnregisterEvent("AUCTION_HOUSE_CLOSED")
+	addon:StopListeningTo("AUCTION_MULTISELL_START")
+	addon:StopListeningTo("AUCTION_MULTISELL_UPDATE")
+	addon:StopListeningTo("AUCTION_HOUSE_CLOSED")
 	
-	addon:RegisterEvent("BAG_UPDATE", OnBagUpdate)	-- just in case things went wrong
+	addon:ListenTo("BAG_UPDATE", OnBagUpdate)	-- just in case things went wrong
 end
 
 local function OnAuctionHouseShow()
 	-- when going to the AH, listen to multi-sell
-	addon:RegisterEvent("AUCTION_MULTISELL_START", OnAuctionMultiSellStart)
-	addon:RegisterEvent("AUCTION_MULTISELL_UPDATE", OnAuctionMultiSellUpdate)
-	addon:RegisterEvent("AUCTION_HOUSE_CLOSED", OnAuctionHouseClosed)
-end
-
-local function OnVoidStorageTransferDone()
-	ScanVoidStorage()
-end
-
-local function OnPlayerInteractionManagerFrameHide(event, interactionType)
-	-- if interactionType ~= Enum.PlayerInteractionType.VoidStorageBanker then return end
-
-	-- Void storage specific
-	if interactionType == Enum.PlayerInteractionType.VoidStorageBanker then 
-		addon:UnregisterEvent("VOID_STORAGE_UPDATE")
-		addon:UnregisterEvent("VOID_STORAGE_CONTENTS_UPDATE")
-		addon:UnregisterEvent("VOID_TRANSFER_DONE")
-
-	-- Guild bank specific
-	elseif interactionType == Enum.PlayerInteractionType.GuildBanker then 
-		OnGuildBankFrameClosed()
-	end
-end
-
-local function OnPlayerInteractionManagerFrameShow(event, interactionType)
-
-	-- Void storage specific
-	if interactionType == Enum.PlayerInteractionType.VoidStorageBanker then 
-		ScanVoidStorage()
-		addon:RegisterEvent("VOID_STORAGE_UPDATE", ScanVoidStorage)
-		addon:RegisterEvent("VOID_STORAGE_CONTENTS_UPDATE", ScanVoidStorage)
-		addon:RegisterEvent("VOID_TRANSFER_DONE", OnVoidStorageTransferDone)
-	
-	-- Bank / Reagent bank
-	elseif interactionType == Enum.PlayerInteractionType.Banker then 
-		ScanReagentBank()
-	
-	-- Guild bank specific
-	elseif interactionType == Enum.PlayerInteractionType.GuildBanker then 
-		OnGuildBankFrameOpened()
-	end
+	addon:ListenTo("AUCTION_MULTISELL_START", OnAuctionMultiSellStart)
+	addon:ListenTo("AUCTION_MULTISELL_UPDATE", OnAuctionMultiSellUpdate)
+	addon:ListenTo("AUCTION_HOUSE_CLOSED", OnAuctionHouseClosed)
 end
 
 
 -- ** Mixins **
 local function _GetContainer(character, containerID)
-	-- containerID can be number or string
-	if type(containerID) == "number" then
-		return character.Containers["Bag" .. containerID]
-	end
 	return character.Containers[containerID]
 end
 
@@ -635,10 +266,10 @@ local function _GetContainers(character)
 	return character.Containers
 end
 
-local BagTypeStrings
+local bagTypeStrings
 
-if WOW_PROJECT_ID == WOW_PROJECT_MAINLINE then
-	BagTypeStrings = {
+if isRetail then
+	bagTypeStrings = {
 		-- [1] = "Quiver",
 		-- [2] = "Ammo Pouch",
 		[4] = GetItemSubClassInfo(Enum.ItemClass.Container, 1), -- "Soul Bag",
@@ -651,7 +282,7 @@ if WOW_PROJECT_ID == WOW_PROJECT_MAINLINE then
 		[1024] = GetItemSubClassInfo(Enum.ItemClass.Container, 6), -- "Mining Bag",
 	}
 else
-	BagTypeStrings = {
+	bagTypeStrings = {
 		[1] = "Quiver",
 		[2] = "Ammo Pouch",
 		[4] = GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER, 1), -- "Soul Bag",
@@ -667,28 +298,50 @@ end
 
 local function _GetContainerInfo(character, containerID)
 	local bag = _GetContainer(character, containerID)
+
+	local size = bit64:GetBits(bag.info, 3, 6)		-- bits 3-8 : bag size
+	local free = bit64:GetBits(bag.info, 9, 6)		-- bits 9-14 : number of free slots in this bag
+	local bagType = bit64:GetBits(bag.info, 15, 5)	-- bits 15-19 : 5 bits, 32 values (from 4 to 27 in 10.x) for the bag type
 	
-	local icon = bag.icon
-	local size = bag.size
-	
-	if containerID == MAIN_BANK_SLOTS then	-- main bank slots
-		icon = "Interface\\Icons\\inv_misc_enggizmos_17"
-	elseif containerID == REAGENTBANK_CONTAINER then
-		icon = "Interface\\Icons\\inv_misc_bag_satchelofcenarius"
-	elseif string.sub(containerID, 1, string.len(VOID_STORAGE_TAB)) == VOID_STORAGE_TAB then
-		icon = "Interface\\Icons\\spell_nature_astralrecalgroup"
-		size = 80
-	end
-	
-	return icon, bag.link, size, bag.freeslots, BagTypeStrings[bag.bagtype]
+	return bag.link, size, free, bagTypeStrings[bagType]
 end
 
+local function _GetContainerLink(character, containerID)
+	local bag = _GetContainer(character, containerID)
+	
+	return bag.link
+end
+
+local bagIcons = {
+	[0] = "Interface\\Buttons\\Button-Backpack-Up",
+	[enum.Keyring] = "ICONS\\INV_Misc_Key_04.blp",
+	[enum.VoidStorageTab1] = "Interface\\Icons\\spell_nature_astralrecalgroup",
+	[enum.VoidStorageTab2] = "Interface\\Icons\\spell_nature_astralrecalgroup",
+	[enum.MainBankSlots] = "Interface\\Icons\\inv_misc_enggizmos_17",
+	[REAGENTBANK_CONTAINER] = "Interface\\Icons\\inv_misc_bag_satchelofcenarius",
+}
+
+local function _GetContainerIcon(character, containerID)
+	-- if it is a known static icon, return it
+	if bagIcons[containerID] then return bagIcons[containerID] end
+	
+	local bag = _GetContainer(character, containerID)
+	return bit64:RightShift(bag.info, 20)		-- bits 20+ : icon id
+end
+
+local bagSizes = {
+	[enum.VoidStorageTab1] = 80,
+	[enum.VoidStorageTab2] = 80,
+	[enum.MainBankSlots] = 28,
+	[REAGENTBANK_CONTAINER] = 98,
+}
+
 local function _GetContainerSize(character, containerID)
-	-- containerID can be number or string
-	if type(containerID) == "number" then
-		return character.Containers["Bag" .. containerID].size
-	end
-	return character.Containers[containerID].size
+	-- if it is a known static size, return it
+	if bagSizes[containerID] then return bagSizes[containerID] end
+
+	local bag = _GetContainer(character, containerID)
+	return bit64:GetBits(bag.info, 3, 6)		-- bits 3-8 : bag size
 end
 
 local rarityColors = {
@@ -700,12 +353,10 @@ local rarityColors = {
 local function _GetColoredContainerSize(character, containerID)
 	local bag = _GetContainer(character, containerID)
 	local size = _GetContainerSize(character, containerID)
+	local rarity = bit64:GetBits(bag.info, 0, 3)		-- bits 0-2 : rarity
+	local color = rarity and rarityColors[rarity] or "|cFFFFFFFF"
 	
-	if bag.rarity and rarityColors[bag.rarity] then
-		return format("%s%s", rarityColors[bag.rarity], size)
-	end
-	
-	return format("%s%s", "|cFFFFFFFF", size)
+	return format("%s%s", color, size)
 end
 
 local function _GetSlotInfo(bag, slotID)
@@ -719,234 +370,123 @@ local function _GetSlotInfo(bag, slotID)
 		isBattlePet = link:match("|Hbattlepet:")
 	end
 	
-	-- return itemID, itemLink, itemCount, isBattlePet
-	return bag.ids[slotID], link, bag.counts[slotID] or 1, isBattlePet
+	local slot = bag.items[slotID]
+	local itemID, count
+	
+	if slot then
+		count = bit64:GetBits(slot, 0, 10)		-- bits 0-9 : item count (10 bits, up to 1024)
+		itemID = bit64:RightShift(slot, 10)		-- bits 10+ : item ID
+	end
+
+	return itemID, link, count, isBattlePet
 end
 
-local function _GetContainerCooldownInfo(bag, slotID)
-	assert(type(bag) == "table")		-- this is the pointer to a bag table, obtained through addon:GetContainer()
-	assert(type(slotID) == "number")
+local function _GetContainerCooldownInfo(bagID, slotID)
+	local index = GetCooldownIndex(bagID, slotID)
 
-	local cd = bag.cooldowns[slotID]
+	local cd = thisCharacter.Cooldowns[index]
 	if cd then
-		local startTime, duration, isEnabled = strsplit("|", bag.cooldowns[slotID])
+		local startTime = cd.startTime
+		local duration = cd.duration
+		
+		-- local startTime, duration, isEnabled = strsplit("|", bag.cooldowns[slotID])
 		local remaining = duration - (GetTime() - startTime)
 		
 		if remaining > 0 then		-- valid cd ? return it
-			return tonumber(startTime), tonumber(duration), tonumber(isEnabled)
+			return startTime, duration, 1		-- 1 = isEnabled
 		end
+		
 		-- cooldown expired ? clean it from the db
-		bag.cooldowns[slotID] = nil
+		table.remove(thisCharacter.Cooldowns, index)
 	end
+end
+
+local function _GetItemCountByID(container, searchedID)
+	local count = 0
+	
+	for slotID, slot in pairs(container.items) do
+		-- is it the item we are searching for ?
+		if searchedID == bit64:RightShift(slot, 10) then	-- bits 10+ : item ID
+			count = count + bit64:GetBits(slot, 0, 10)		-- bits 0-9 : item count (10 bits, up to 1024)
+		end
+	end
+
+	return count
 end
 
 local function _GetContainerItemCount(character, searchedID)
 	local bagCount = 0
 	local bankCount = 0
-	local voidCount = 0
 	local reagentBagCount = 0
-	local reagentBankCount = 0
-	local id
-	
-	-- old voidstorage, simply delete it, might still be listed if players haven't logged on all their alts					
-	character.Containers["VoidStorage"] = nil
+	local count
 		
-	for containerName, container in pairs(character.Containers) do
-		for slotID = 1, container.size do
-			id = container.ids[slotID]
-			
-			if (id) and (id == searchedID) then
-				local itemCount = container.counts[slotID] or 1
-				if (containerName == "VoidStorage.Tab1") or (containerName == "VoidStorage.Tab2") then
-					voidCount = voidCount + 1
-				elseif (containerName == "Bag"..MAIN_BANK_SLOTS) then
-					bankCount = bankCount + itemCount
-				elseif (containerName == "Bag-2") then
-					bagCount = bagCount + itemCount
-				elseif (containerName == "Bag-3") then
-					reagentBankCount = reagentBankCount + itemCount
-					
-				-- Bag5 is the reagent bag in retail, but 1st bank bag in classic & LKj
-				elseif (containerName == "Bag5") and WOW_PROJECT_ID == WOW_PROJECT_MAINLINE then -- Reagent Bag
-					reagentBagCount = reagentBagCount + itemCount
-				else
-					local bagNum = tonumber(string.sub(containerName, 4))
-					if (bagNum >= 0) and (bagNum <= 4) then
-						bagCount = bagCount + itemCount
-					else
-						bankCount = bankCount + itemCount
-					end
-				end
-			end
+	for containerID, container in pairs(character.Containers) do
+		-- get the container count
+		count = _GetItemCountByID(_GetContainer(character, containerID), searchedID)
+		
+		if containerID <= 4 then
+			bagCount = bagCount + count
+		elseif containerID == 5 and isRetail then
+			reagentBagCount = reagentBagCount + count
+		else
+			bankCount = bankCount + count
 		end
 	end
 
-	return bagCount, bankCount, voidCount, reagentBankCount, reagentBagCount
+	return bagCount, bankCount, reagentBagCount
+end
+
+local function _GetReagentBagItemCount(character, searchedID)
+	-- Reagent bag = bag 5 in retail only
+	return _GetItemCountByID(_GetContainer(character, enum.ReagentBag), searchedID)
 end
 
 local function _IterateContainerSlots(character, callback)
-	for containerName, container in pairs(character.Containers) do
+	for containerID, container in pairs(character.Containers) do
 		for slotID = 1, container.size do
 			local itemID, itemLink, itemCount, isBattlePet = _GetSlotInfo(container, slotID)
 			
 			-- Callback only if there is an item in that slot
 			if itemID then
-				callback(containerName, itemID, itemLink, itemCount, isBattlePet)
+				callback(containerID, itemID, itemLink, itemCount, isBattlePet)
 			end
 		end
 	end
 end
 
 local function _GetNumBagSlots(character)
-	return character.numBagSlots
+	return bit64:GetBits(character.bagInfo, 0, 10)		-- bits 0-9 : num bag slots
 end
 
 local function _GetNumFreeBagSlots(character)
-	return character.numFreeBagSlots
+	return character.bankInfo
+		and bit64:RightShift(character.bagInfo, 10)		-- bits 10+ : num free slots
+		or 0
 end
 
 local function _GetNumBankSlots(character)
-	return character.numBankSlots
+	return character.bankInfo
+		and bit64:GetBits(character.bankInfo, 0, 10)		-- bits 0-9 : num bag slots
+		or 0
 end
 
 local function _GetNumFreeBankSlots(character)
-	return character.numFreeBankSlots
+	return character.bankInfo
+		and bit64:GetBits(character.bankInfo, 10, 10)	-- bits 10-19 : num free slots
+		or 0
 end
 
 local function _GetNumPurchasedBankSlots(character)
-	-- nil if bank never visited
-	-- 0 if zero slots actually purchased
-	return character.numPurchasedBankSlots
-end
-
-local function _GetVoidStorageItem(character, index)
-	return character.Containers["VoidStorage"].ids[index]
-end
-
-local function _GetKeystoneName(character)
-	return character.Keystone.name or ""
-end
-
-local function _GetKeystoneLevel(character)
-	return character.Keystone.level or 0
-end
-
-local function _GetGuildBankItemCount(guild, searchedID)
-	local count = 0
-	for _, container in pairs(guild.Tabs) do
-	   for slotID, id in pairs(container.ids) do
-	      if (id == searchedID) then
-	         count = count + (container.counts[slotID] or 1)
-	      end
-	   end
-	end
-	return count
-end
-	
-local function _GetGuildBankTab(guild, tabID)
-	return guild.Tabs[tabID]
-end
-	
-local function _GetGuildBankTabName(guild, tabID)
-	return guild.Tabs[tabID].name
-end
-
-local function _IterateGuildBankSlots(guild, callback)
-	for tabID, tab in pairs(guild.Tabs) do
-		if tab.name then
-			for slotID = 1, 98 do
-				local itemID, itemLink, itemCount, isBattlePet = _GetSlotInfo(tab, slotID)
-				
-				-- Callback only if there is an item in that slot
-				if itemID then
-					local location = format("%s, %s - col %d/row %d)", GUILD_BANK, tab.name, floor((slotID-1)/7)+1, ((slotID-1)%7)+1)
-				
-					callback(location, itemID, itemLink, itemCount, isBattlePet)
-				end
-			end
-		end
-	end
-end
-
-local function _GetGuildBankTabIcon(guild, tabID)
-	return guild.Tabs[tabID].icon
-end
-
-local function _GetGuildBankTabItemCount(guild, tabID, searchedID)
-	local count = 0
-	local container = guild.Tabs[tabID]
-	
-	for slotID, id in pairs(container.ids) do
-		if (id == searchedID) then
-			count = count + (container.counts[slotID] or 1)
-		end
-	end
-	return count
-end
-
-local function _GetGuildBankTabLastUpdate(guild, tabID)
-	return guild.Tabs[tabID].ClientTime
-end
-
-local function _GetGuildBankMoney(guild)
-	return guild.money
-end
-
-local function _GetGuildBankFaction(guild)
-	return guild.faction
-end
-
-local function _ImportGuildBankTab(guild, tabID, data)
-	wipe(guild.Tabs[tabID])							-- clear existing data
-	guild.Tabs[tabID] = data
-end
-
-local function _GetGuildBankTabSuppliers()
-	return guildMembers
-end
-
-local function _GetGuildMemberBankTabInfo(member, tabName)
-	-- for the current guild, return the guild member's data about a given tab
-	if guildMembers[member] then
-		if guildMembers[member][tabName] then
-			local tab = guildMembers[member][tabName]
-			return tab.clientTime, tab.serverHour, tab.serverMinute
-		end
-	end
-end
-
-local function _RequestGuildMemberBankTab(member, tabName)
-	GuildWhisper(member, MSG_BANKTAB_REQUEST, tabName)
-end
-
-local function _RejectBankTabRequest(member)
-	GuildWhisper(member, MSG_BANKTAB_REQUEST_REJECTED)
-end
-
-local function _SendBankTabToGuildMember(member, tabName)
-	-- send the actual content of a bank tab to a guild member
-	local thisGuild = GetThisGuild()
-	if thisGuild then
-		local tabID
-		if guildMembers[member] then
-			if guildMembers[member][tabName] then
-				tabID = guildMembers[member][tabName].id
-			end
-		end	
-	
-		if tabID then
-			GuildWhisper(member, MSG_BANKTAB_TRANSFER, thisGuild.Tabs[tabID])
-		end
-	end
+	return bit64:RightShift(character.bankInfo, 20)		-- bits 20+ : num purchased
 end
 
 local function _IterateBags(character, callback)
 	if not character.Containers then return end
 	
-	for containerName, container in pairs(character.Containers) do
+	for containerID, container in pairs(character.Containers) do
 		for slotID = 1, container.size do
 			local itemID = container.ids[slotID]
-			local stop = callback(containerName, container, slotID, itemID)
+			local stop = callback(containerID, container, slotID, itemID)
 			if stop then return end		-- exit if the callback returns true
 		end
 	end
@@ -954,286 +494,74 @@ end
 
 local function _SearchBagsForItem(character, searchedItemID, onItemFound)
 	-- Iterate bag contents, call the callback if the item is found
-	_IterateBags(character, function(bagName, bag, slotID, itemID) 
+	_IterateBags(character, function(containerID, bag, slotID, itemID) 
 		if itemID == searchedItemID then
-			onItemFound(bagName, bag, slotID)
+			onItemFound(containerID, bag, slotID)
 		end
 	end)
 end
 
-local function _ToggleBankType(character, bankType)
-	local types = DataStore.Enum.BankTypes
+
+DataStore:OnAddonLoaded(addonName, function()
+	DataStore:RegisterModule({
+		addon = addon,
+		addonName = addonName,
+		characterTables = {
+			["DataStore_Containers_Characters"] = {
+				GetContainer = _GetContainer,
+				GetContainers = _GetContainers,
+				GetContainerInfo = _GetContainerInfo,
+				GetContainerLink = _GetContainerLink,
+				GetContainerIcon = _GetContainerIcon,
+				GetContainerSize = _GetContainerSize,
+				GetColoredContainerSize = _GetColoredContainerSize,
+				
+				
+				GetContainerItemCount = _GetContainerItemCount,
+				GetNumBagSlots = _GetNumBagSlots,
+				GetNumFreeBagSlots = _GetNumFreeBagSlots,
+				GetNumBankSlots = _GetNumBankSlots,
+				GetNumFreeBankSlots = _GetNumFreeBankSlots,
+
+				-- retail
+				GetReagentBagItemCount = isRetail and _GetReagentBagItemCount,
+				GetNumPurchasedBankSlots = isRetail and _GetNumPurchasedBankSlots,
+				IterateContainerSlots = isRetail and _IterateContainerSlots,
+				
+				-- non-retail
+				IterateBags = not isRetail and _IterateBags,
+				SearchBagsForItem = not isRetail and _SearchBagsForItem,
+			},
+			["DataStore_Containers_Banks"] = {
+			}
+		},
+	})
+
+	thisCharacter = DataStore:GetCharacterDB("DataStore_Containers_Characters", true)
+	thisCharacter.Containers = thisCharacter.Containers or {}
+	thisCharacter.Cooldowns = thisCharacter.Cooldowns or {}
 	
-	if bankType >= types.Minimum and bankType <= types.Maximum then
-		-- toggle the appropriate bit for this bank type
-		character.bankType = bXOr(character.bankType, 2^(bankType - 1))
-	end
-end
+	thisCharacterBank = DataStore:GetCharacterDB("DataStore_Containers_Banks")
 
-local function _IsBankType(character, bankType)
-	-- speed up the process a bit if all flags are 0
-	return (character.bankType == 0)
-		and false
-		or TestBit(character.bankType, bankType - 1)
-end
+	DataStore:RegisterMethod(addon, "GetSlotInfo", _GetSlotInfo)
+	DataStore:RegisterMethod(addon, "GetItemCountByID", _GetItemCountByID)
+	DataStore:RegisterMethod(addon, "GetContainerCooldownInfo", _GetContainerCooldownInfo)
+end)
 
-local function _GetBankType(character)
-	return character.bankType
-end
-
-local function _GetBankTypes(character)
-	if character.bankType == 0 then return ""	end
-	
-	local bankTypeLabels = {}
-	
-	local types = DataStore.Enum.BankTypes
-	local labels = DataStore.Enum.BankTypesLabels
-	
-	-- loop through all types
-	for i = types.Minimum, types.Maximum do
-		-- add label if bit is set
-		if TestBit(character.bankType, i - 1) then
-			table.insert(bankTypeLabels, labels[i])
-		end
-	end
-	
-	return table.concat(bankTypeLabels, ", "), bankTypeLabels
-end
-
-local PublicMethods = {
-	GetContainer = _GetContainer,
-	GetContainers = _GetContainers,
-	GetContainerInfo = _GetContainerInfo,
-	GetContainerSize = _GetContainerSize,
-	GetColoredContainerSize = _GetColoredContainerSize,
-	GetSlotInfo = _GetSlotInfo,
-	GetContainerCooldownInfo = _GetContainerCooldownInfo,
-	GetContainerItemCount = _GetContainerItemCount,
-	GetNumBagSlots = _GetNumBagSlots,
-	GetNumFreeBagSlots = _GetNumFreeBagSlots,
-	GetNumBankSlots = _GetNumBankSlots,
-	GetNumFreeBankSlots = _GetNumFreeBankSlots,
-}
-
-if WOW_PROJECT_ID == WOW_PROJECT_MAINLINE then
-	-- Retail only
-	PublicMethods.IterateContainerSlots = _IterateContainerSlots
-	PublicMethods.GetNumPurchasedBankSlots = _GetNumPurchasedBankSlots
-	PublicMethods.GetVoidStorageItem = _GetVoidStorageItem
-	PublicMethods.GetKeystoneName = _GetKeystoneName
-	PublicMethods.GetKeystoneLevel = _GetKeystoneLevel
-	PublicMethods.ToggleBankType = _ToggleBankType
-	PublicMethods.IsBankType = _IsBankType
-	PublicMethods.GetBankType = _GetBankType
-	PublicMethods.GetBankTypes = _GetBankTypes
-else
-	-- Non-retail only
-	PublicMethods.IterateBags = _IterateBags
-	PublicMethods.SearchBagsForItem = _SearchBagsForItem
-end
-
-if WOW_PROJECT_ID ~= WOW_PROJECT_CLASSIC then
-	-- Retail and Wrath
-	PublicMethods.GetGuildBankItemCount = _GetGuildBankItemCount
-	PublicMethods.GetGuildBankTab = _GetGuildBankTab
-	PublicMethods.GetGuildBankTabName = _GetGuildBankTabName
-	PublicMethods.IterateGuildBankSlots = _IterateGuildBankSlots
-	PublicMethods.GetGuildBankTabIcon = _GetGuildBankTabIcon
-	PublicMethods.GetGuildBankTabItemCount = _GetGuildBankTabItemCount
-	PublicMethods.GetGuildBankTabLastUpdate = _GetGuildBankTabLastUpdate
-	PublicMethods.GetGuildBankMoney = _GetGuildBankMoney
-	PublicMethods.GetGuildBankFaction = _GetGuildBankFaction
-	PublicMethods.ImportGuildBankTab = _ImportGuildBankTab
-	PublicMethods.GetGuildMemberBankTabInfo = _GetGuildMemberBankTabInfo
-	PublicMethods.RequestGuildMemberBankTab = _RequestGuildMemberBankTab
-	PublicMethods.RejectBankTabRequest = _RejectBankTabRequest
-	PublicMethods.SendBankTabToGuildMember = _SendBankTabToGuildMember
-	PublicMethods.GetGuildBankTabSuppliers = _GetGuildBankTabSuppliers
-end
-
-
--- *** Guild Comm ***
---[[	*** Protocol ***
-
-At login: 
-	Broadcast of guild bank timers on the guild channel
-After the guild bank frame is closed:
-	Broadcast of guild bank timers on the guild channel
-
-Client addon calls: DataStore:RequestGuildMemberBankTab()
-	Client				Server
-
-	==> MSG_BANKTAB_REQUEST 
-	<== MSG_BANKTAB_REQUEST_ACK (immediate ack)   
-
-	<== MSG_BANKTAB_REQUEST_REJECTED (stop)   
-	or 
-	<== MSG_BANKTAB_TRANSFER (actual data transfer)
---]]
-
-local function OnAnnounceLogin(self, guildName)
-	-- when the main DataStore module sends its login info, share the guild bank last visit time across guild members
-	local timestamps = GetBankTimestamps(guildName)
-	if timestamps then	-- nil if guild bank hasn't been visited yet, so don't broadcast anything
-		GuildBroadcast(MSG_SEND_BANK_TIMESTAMPS, timestamps)
-	end
-end
-
-local function OnGuildMemberOffline(self, member)
-	guildMembers[member] = nil
-	addon:SendMessage("DATASTORE_GUILD_BANKTABS_UPDATED", member)
-end
-
-local GuildCommCallbacks = {
-	[MSG_SEND_BANK_TIMESTAMPS] = function(sender, timestamps)
-			if sender ~= UnitName("player") then						-- don't send back to self
-				local timestamps = GetBankTimestamps()
-				if timestamps then
-					GuildWhisper(sender, MSG_BANK_TIMESTAMPS_REPLY, timestamps)		-- reply by sending my own data..
-				end
-			end
-			SaveBankTimestamps(sender, timestamps)
-		end,
-	[MSG_BANK_TIMESTAMPS_REPLY] = function(sender, timestamps)
-			SaveBankTimestamps(sender, timestamps)
-		end,
-	[MSG_BANKTAB_REQUEST] = function(sender, tabName)
-			-- trigger the event only, actual response (ack or not) must be handled by client addons
-			GuildWhisper(sender, MSG_BANKTAB_REQUEST_ACK)		-- confirm that the request has been received
-			addon:SendMessage("DATASTORE_BANKTAB_REQUESTED", sender, tabName)
-		end,
-	[MSG_BANKTAB_REQUEST_ACK] = function(sender)
-			addon:SendMessage("DATASTORE_BANKTAB_REQUEST_ACK", sender)
-		end,
-	[MSG_BANKTAB_REQUEST_REJECTED] = function(sender)
-			addon:SendMessage("DATASTORE_BANKTAB_REQUEST_REJECTED", sender)
-		end,
-	[MSG_BANKTAB_TRANSFER] = function(sender, data)
-			local guildName = GetGuildInfo("player")
-			local guild	= GetThisGuild()
-			
-			for tabID, tab in pairs(guild.Tabs) do
-				if tab.name == data.name then	-- this is the tab being updated
-					_ImportGuildBankTab(guild, tabID, data)
-					addon:SendMessage("DATASTORE_BANKTAB_UPDATE_SUCCESS", sender, guildName, data.name, tabID)
-					GuildBroadcast(MSG_SEND_BANK_TIMESTAMPS, GetBankTimestamps(guildName))
-				end
-			end
-		end,
-}
-
-function addon:OnInitialize()
-	addon.db = LibStub("AceDB-3.0"):New(format("%sDB", addonName), AddonDB_Defaults)
-
-	DataStore:RegisterModule(addonName, addon, PublicMethods)
-
-	-- All versions
-	DataStore:SetCharacterBasedMethod("GetContainer")
-	DataStore:SetCharacterBasedMethod("GetContainers")
-	DataStore:SetCharacterBasedMethod("GetContainerInfo")
-	DataStore:SetCharacterBasedMethod("GetContainerSize")
-	DataStore:SetCharacterBasedMethod("GetColoredContainerSize")
-	DataStore:SetCharacterBasedMethod("GetContainerItemCount")
-	DataStore:SetCharacterBasedMethod("GetNumBagSlots")
-	DataStore:SetCharacterBasedMethod("GetNumFreeBagSlots")
-	DataStore:SetCharacterBasedMethod("GetNumBankSlots")
-	DataStore:SetCharacterBasedMethod("GetNumFreeBankSlots")
-	
-	if WOW_PROJECT_ID == WOW_PROJECT_MAINLINE then
-		-- Retail only
-		DataStore:SetCharacterBasedMethod("IterateContainerSlots")
-		DataStore:SetCharacterBasedMethod("GetNumPurchasedBankSlots")
-		DataStore:SetCharacterBasedMethod("GetVoidStorageItem")
-		DataStore:SetCharacterBasedMethod("GetKeystoneName")
-		DataStore:SetCharacterBasedMethod("GetKeystoneLevel")
-		DataStore:SetCharacterBasedMethod("ToggleBankType")
-		DataStore:SetCharacterBasedMethod("IsBankType")
-		DataStore:SetCharacterBasedMethod("GetBankType")
-		DataStore:SetCharacterBasedMethod("GetBankTypes")
-	else
-		-- Non-retail only
-		DataStore:SetCharacterBasedMethod("IterateBags")
-		DataStore:SetCharacterBasedMethod("SearchBagsForItem")
-	end
-	
-	-- Classic stops here
-	if WOW_PROJECT_ID == WOW_PROJECT_CLASSIC then return end
-	
-	-- Retail + Wrath
-	DataStore:SetGuildCommCallbacks(commPrefix, GuildCommCallbacks)
-	DataStore:SetGuildBasedMethod("GetGuildBankItemCount")
-	DataStore:SetGuildBasedMethod("GetGuildBankTab")
-	DataStore:SetGuildBasedMethod("GetGuildBankTabName")
-	DataStore:SetGuildBasedMethod("IterateGuildBankSlots")
-	DataStore:SetGuildBasedMethod("GetGuildBankTabIcon")
-	DataStore:SetGuildBasedMethod("GetGuildBankTabItemCount")
-	DataStore:SetGuildBasedMethod("GetGuildBankTabLastUpdate")
-	DataStore:SetGuildBasedMethod("GetGuildBankMoney")
-	DataStore:SetGuildBasedMethod("GetGuildBankFaction")
-	DataStore:SetGuildBasedMethod("ImportGuildBankTab")
-
-	addon:RegisterMessage("DATASTORE_ANNOUNCELOGIN", OnAnnounceLogin)
-	addon:RegisterMessage("DATASTORE_GUILD_MEMBER_OFFLINE", OnGuildMemberOffline)
-	addon:RegisterComm(commPrefix, DataStore:GetGuildCommHandler())
-end
-
-function addon:OnEnable()
+DataStore:OnPlayerLogin(function()
 	-- manually update bags 0 to 5, then register the event, this avoids reacting to the flood of BAG_UPDATE events at login
 	for bagID = 0, COMMON_NUM_BAG_SLOTS do
 		ScanBag(bagID)
 	end
 
 	-- Only for Classic & BC, scan the keyring
-	if WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE and HasKey() then
-		ScanBag(-2)
+	if not isRetail and HasKey() then
+		ScanBag(enum.Keyring)
 	end
 	
-	addon:RegisterEvent("BAG_UPDATE", OnBagUpdate)
-	addon:RegisterEvent("BANKFRAME_OPENED", OnBankFrameOpened)
+	addon:ListenTo("BAG_UPDATE", OnBagUpdate)
+	addon:ListenTo("BANKFRAME_OPENED", OnBankFrameOpened)
 	
 	-- disable bag updates during multi sell at the AH
-	addon:RegisterEvent("AUCTION_HOUSE_SHOW", OnAuctionHouseShow)
-	
-	-- Classic stops here
-	if WOW_PROJECT_ID == WOW_PROJECT_CLASSIC then return end
-	
-	-- Retail + Wrath
-	addon:RegisterEvent("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", OnPlayerInteractionManagerFrameShow)
-	addon:RegisterEvent("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", OnPlayerInteractionManagerFrameHide)
-		
-	if WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC or WOW_PROJECT_ID == WOW_PROJECT_WRATH_CLASSIC then
-		-- Wrath only .. and exit
-		addon:RegisterEvent("GUILDBANKFRAME_OPENED", OnGuildBankFrameOpened)
-		return
-	end
-	
-	-- Retail only
-	addon:RegisterEvent("PLAYER_ALIVE", OnPlayerAlive)
-	addon:RegisterEvent("PLAYERREAGENTBANKSLOTS_CHANGED", OnPlayerReagentBankSlotsChanged)
-	addon:RegisterEvent("WEEKLY_REWARDS_UPDATE", OnWeeklyRewardsUpdate)
-end
-
-function addon:OnDisable()
-	
-	-- All versions
-	addon:UnregisterEvent("BAG_UPDATE")
-	addon:UnregisterEvent("BANKFRAME_OPENED")
-	addon:UnregisterEvent("AUCTION_HOUSE_SHOW")	
-	
-	if WOW_PROJECT_ID == WOW_PROJECT_CLASSIC then return end
-	
-	-- Retail + Wrath
-	addon:UnregisterEvent("PLAYER_INTERACTION_MANAGER_FRAME_SHOW")	
-	addon:UnregisterEvent("PLAYER_INTERACTION_MANAGER_FRAME_HIDE")
-	
-	if WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC or WOW_PROJECT_ID == WOW_PROJECT_WRATH_CLASSIC then
-		-- Wrath only .. and exit
-		addon:UnregisterEvent("GUILDBANKFRAME_OPENED")
-		return 
-	end
-	
-	-- Retail only
-	addon:UnregisterEvent("PLAYER_ALIVE")
-	addon:UnregisterEvent("PLAYERREAGENTBANKSLOTS_CHANGED")
-	addon:UnregisterEvent("WEEKLY_REWARDS_UPDATE")	
-end
+	addon:ListenTo("AUCTION_HOUSE_SHOW", OnAuctionHouseShow)
+end)
