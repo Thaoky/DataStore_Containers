@@ -158,12 +158,11 @@ end
 
 local function ScanBag(bagID)
 	-- https://wowpedia.fandom.com/wiki/BagID
-
 	local bag = GetContainer(bagID)
-	local rarity, icon
 	
 	local icon = bagID > 0 and GetInventoryItemTexture("player", C_Container.ContainerIDToInventoryID(bagID))
 	bag.link = bagID > 0 and GetInventoryItemLink("player", C_Container.ContainerIDToInventoryID(bagID))
+	
 	local rarity = bag.link and select(3, GetItemInfo(bag.link))
 	local size = C_Container.GetContainerNumSlots(bagID)
 	
@@ -188,7 +187,6 @@ local function ScanBag(bagID)
 	ScanBagSlotsInfo()
 end
 
-
 -- *** Event Handlers ***
 local isBankOpen
 
@@ -198,10 +196,9 @@ local function OnBagUpdate(event, bag)
 		return
 	end
 
-	if (bag == enum.Keyring) or (bag >= 0) then
+	if bag == enum.Keyring or bag >= 0 then
 		ScanBag(bag)
 	end
-
 end
 
 local function OnBankFrameClosed()
@@ -266,7 +263,51 @@ local function _GetContainers(character)
 	return character.Containers
 end
 
+local function _GetNumBagSlots(character)
+	return bit64:GetBits(character.bagInfo, 0, 10)		-- bits 0-9 : num bag slots
+end
+
+local function _GetNumFreeBagSlots(character)
+	return character.bagInfo
+		and bit64:RightShift(character.bagInfo, 10)		-- bits 10+ : num free slots
+		or 0
+end
+
+local function _GetNumBankSlots(character)
+	return character.bankInfo
+		and bit64:GetBits(character.bankInfo, 0, 10)		-- bits 0-9 : num bag slots
+		or 0
+end
+
+local function _GetNumFreeBankSlots(character)
+	return character.bankInfo
+		and bit64:GetBits(character.bankInfo, 10, 10)	-- bits 10-19 : num free slots
+		or 0
+end
+
+local function _GetNumPurchasedBankSlots(character)
+	return character.bankInfo
+		and bit64:RightShift(character.bankInfo, 20)		-- bits 20+ : num purchased
+		or 0
+end
+
 local bagTypeStrings
+
+local bagIcons = {
+	[0] = "Interface\\Buttons\\Button-Backpack-Up",
+	[enum.Keyring] = "ICONS\\INV_Misc_Key_04.blp",
+	[enum.VoidStorageTab1] = "Interface\\Icons\\spell_nature_astralrecalgroup",
+	[enum.VoidStorageTab2] = "Interface\\Icons\\spell_nature_astralrecalgroup",
+	[enum.MainBankSlots] = "Interface\\Icons\\inv_misc_enggizmos_17",
+	[enum.ReagentBank] = "Interface\\Icons\\inv_misc_bag_satchelofcenarius",
+}
+
+local bagSizes = {
+	[enum.VoidStorageTab1] = 80,
+	[enum.VoidStorageTab2] = 80,
+	[enum.MainBankSlots] = 28,
+	[enum.ReagentBank] = 98,
+}
 
 if isRetail then
 	bagTypeStrings = {
@@ -281,6 +322,9 @@ if isRetail then
 		[512] = GetItemSubClassInfo(Enum.ItemClass.Container, 5), -- "Gem Bag",
 		[1024] = GetItemSubClassInfo(Enum.ItemClass.Container, 6), -- "Mining Bag",
 	}
+	
+	bagIcons[REAGENTBANK_CONTAINER] = "Interface\\Icons\\inv_misc_bag_satchelofcenarius"
+	bagSizes[REAGENTBANK_CONTAINER] = 98
 else
 	bagTypeStrings = {
 		[1] = "Quiver",
@@ -299,11 +343,16 @@ end
 local function _GetContainerInfo(character, containerID)
 	local bag = _GetContainer(character, containerID)
 
-	local size = bit64:GetBits(bag.info, 3, 6)		-- bits 3-8 : bag size
-	local free = bit64:GetBits(bag.info, 9, 6)		-- bits 9-14 : number of free slots in this bag
-	local bagType = bit64:GetBits(bag.info, 15, 5)	-- bits 15-19 : 5 bits, 32 values (from 4 to 27 in 10.x) for the bag type
+	local link, size, free, bagType
+
+	if bag and bag.info then
+		size = bit64:GetBits(bag.info, 3, 6)		-- bits 3-8 : bag size
+		free = bit64:GetBits(bag.info, 9, 6)		-- bits 9-14 : number of free slots in this bag
+		bagType = bit64:GetBits(bag.info, 15, 5)	-- bits 15-19 : 5 bits, 32 values (from 4 to 27 in 10.x) for the bag type
+		link = bag.link
+	end
 	
-	return bag.link, size, free, bagTypeStrings[bagType]
+	return link, size, free, bagTypeStrings[bagType]
 end
 
 local function _GetContainerLink(character, containerID)
@@ -311,15 +360,6 @@ local function _GetContainerLink(character, containerID)
 	
 	return bag.link
 end
-
-local bagIcons = {
-	[0] = "Interface\\Buttons\\Button-Backpack-Up",
-	[enum.Keyring] = "ICONS\\INV_Misc_Key_04.blp",
-	[enum.VoidStorageTab1] = "Interface\\Icons\\spell_nature_astralrecalgroup",
-	[enum.VoidStorageTab2] = "Interface\\Icons\\spell_nature_astralrecalgroup",
-	[enum.MainBankSlots] = "Interface\\Icons\\inv_misc_enggizmos_17",
-	[REAGENTBANK_CONTAINER] = "Interface\\Icons\\inv_misc_bag_satchelofcenarius",
-}
 
 local function _GetContainerIcon(character, containerID)
 	-- if it is a known static icon, return it
@@ -329,39 +369,51 @@ local function _GetContainerIcon(character, containerID)
 	return bit64:RightShift(bag.info, 20)		-- bits 20+ : icon id
 end
 
-local bagSizes = {
-	[enum.VoidStorageTab1] = 80,
-	[enum.VoidStorageTab2] = 80,
-	[enum.MainBankSlots] = 28,
-	[REAGENTBANK_CONTAINER] = 98,
-}
-
 local function _GetContainerSize(character, containerID)
 	-- if it is a known static size, return it
 	if bagSizes[containerID] then return bagSizes[containerID] end
 
 	local bag = _GetContainer(character, containerID)
-	return bit64:GetBits(bag.info, 3, 6)		-- bits 3-8 : bag size
+	
+	return (bag and bag.info)
+		and bit64:GetBits(bag.info, 3, 6)		-- bits 3-8 : bag size
+		or 0
 end
 
 local rarityColors = {
+	[0] = "|cFFFFFFFF",
 	[2] = "|cFF1EFF00",
 	[3] = "|cFF0070DD",
 	[4] = "|cFFA335EE"
 }
 
+local function _GetContainerRarity(character, containerID)
+	local bag = _GetContainer(character, containerID)
+	
+	return (bag and bag.info)
+		and bit64:GetBits(bag.info, 0, 3)		-- bits 0-2 : rarity
+		or 0
+end
+
 local function _GetColoredContainerSize(character, containerID)
 	local bag = _GetContainer(character, containerID)
 	local size = _GetContainerSize(character, containerID)
-	local rarity = bit64:GetBits(bag.info, 0, 3)		-- bits 0-2 : rarity
+	local rarity = _GetContainerRarity(character, containerID)
+
+	-- attempt to recover from a bad scan..
+	if rarity == 0 and bag then
+		rarity = bag.link and select(3, GetItemInfo(bag.link))
+	end
+
 	local color = rarity and rarityColors[rarity] or "|cFFFFFFFF"
 	
 	return format("%s%s", color, size)
 end
 
 local function _GetSlotInfo(bag, slotID)
-	assert(type(bag) == "table")		-- this is the pointer to a bag table, obtained through addon:GetContainer()
-	assert(type(slotID) == "number")
+	-- assert(type(bag) == "table")		-- this is the pointer to a bag table, obtained through addon:GetContainer()
+	-- assert(type(slotID) == "number")
+	if not bag then return end
 
 	local link = bag.links[slotID]
 	local isBattlePet
@@ -443,7 +495,7 @@ end
 
 local function _IterateContainerSlots(character, callback)
 	for containerID, container in pairs(character.Containers) do
-		for slotID = 1, container.size do
+		for slotID = 1, _GetContainerSize(character, containerID) do
 			local itemID, itemLink, itemCount, isBattlePet = _GetSlotInfo(container, slotID)
 			
 			-- Callback only if there is an item in that slot
@@ -452,32 +504,6 @@ local function _IterateContainerSlots(character, callback)
 			end
 		end
 	end
-end
-
-local function _GetNumBagSlots(character)
-	return bit64:GetBits(character.bagInfo, 0, 10)		-- bits 0-9 : num bag slots
-end
-
-local function _GetNumFreeBagSlots(character)
-	return character.bankInfo
-		and bit64:RightShift(character.bagInfo, 10)		-- bits 10+ : num free slots
-		or 0
-end
-
-local function _GetNumBankSlots(character)
-	return character.bankInfo
-		and bit64:GetBits(character.bankInfo, 0, 10)		-- bits 0-9 : num bag slots
-		or 0
-end
-
-local function _GetNumFreeBankSlots(character)
-	return character.bankInfo
-		and bit64:GetBits(character.bankInfo, 10, 10)	-- bits 10-19 : num free slots
-		or 0
-end
-
-local function _GetNumPurchasedBankSlots(character)
-	return bit64:RightShift(character.bankInfo, 20)		-- bits 20+ : num purchased
 end
 
 local function _IterateBags(character, callback)
@@ -514,15 +540,15 @@ DataStore:OnAddonLoaded(addonName, function()
 				GetContainerLink = _GetContainerLink,
 				GetContainerIcon = _GetContainerIcon,
 				GetContainerSize = _GetContainerSize,
+				GetContainerRarity = _GetContainerRarity,
 				GetColoredContainerSize = _GetColoredContainerSize,
-				
 				
 				GetContainerItemCount = _GetContainerItemCount,
 				GetNumBagSlots = _GetNumBagSlots,
 				GetNumFreeBagSlots = _GetNumFreeBagSlots,
 				GetNumBankSlots = _GetNumBankSlots,
 				GetNumFreeBankSlots = _GetNumFreeBankSlots,
-
+				
 				-- retail
 				GetReagentBagItemCount = isRetail and _GetReagentBagItemCount,
 				GetNumPurchasedBankSlots = isRetail and _GetNumPurchasedBankSlots,
@@ -549,17 +575,21 @@ DataStore:OnAddonLoaded(addonName, function()
 end)
 
 DataStore:OnPlayerLogin(function()
-	-- manually update bags 0 to 5, then register the event, this avoids reacting to the flood of BAG_UPDATE events at login
-	for bagID = 0, COMMON_NUM_BAG_SLOTS do
-		ScanBag(bagID)
-	end
+	C_Timer.After(3, function()
+		-- To avoid the long list of BAG_UPDATE at startup, make the initial scan 3 seconds later ..
+		for bagID = 0, COMMON_NUM_BAG_SLOTS do
+			ScanBag(bagID)
+		end
+
+		-- .. then register the event
+		addon:ListenTo("BAG_UPDATE", OnBagUpdate)
+	end)
 
 	-- Only for Classic & BC, scan the keyring
 	if not isRetail and HasKey() then
 		ScanBag(enum.Keyring)
 	end
 	
-	addon:ListenTo("BAG_UPDATE", OnBagUpdate)
 	addon:ListenTo("BANKFRAME_OPENED", OnBankFrameOpened)
 	
 	-- disable bag updates during multi sell at the AH

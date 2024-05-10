@@ -97,14 +97,51 @@ local function OnBankFrameOpened()
 	addon:ListenTo("PLAYERBANKSLOTS_CHANGED", OnPlayerBankSlotsChanged)
 end
 
+-- ** Mixins **
+
+local function _GetSlotInfo(bag, slotID)
+	-- This function is repeated in the main file, here, and in Guild bank.. find some time to clean this.
+	if not bag then return end
+
+	local link = bag.links[slotID]
+	local isBattlePet
+	
+	if link then
+		isBattlePet = link:match("|Hbattlepet:")
+	end
+	
+	local slot = bag.items[slotID]
+	local itemID, count
+	
+	if slot then
+		count = bit64:GetBits(slot, 0, 10)		-- bits 0-9 : item count (10 bits, up to 1024)
+		itemID = bit64:RightShift(slot, 10)		-- bits 10+ : item ID
+	end
+
+	return itemID, link, count, isBattlePet
+end
+
+local function _IteratePlayerBankSlots(character, callback)
+	for slotID = 1, NUM_MAIN_SLOTS do
+		local itemID, itemLink, itemCount, isBattlePet = _GetSlotInfo(character, slotID)
+		
+		-- Callback only if there is an item in that slot
+		if itemID then
+			callback(itemID, itemLink, itemCount, isBattlePet)
+		end
+	end
+end
 
 DataStore:OnAddonLoaded(addonName, function() 
 	DataStore:RegisterTables({
 		addon = addon,
 		characterTables = {
 			["DataStore_Containers_Banks"] = {
+				GetPlayerBank = function(character) return character end,
 				GetPlayerBankItemCount = function(character, searchedID) return DataStore:GetItemCountByID(character, searchedID) end,
 				GetPlayerBankInfo = function(character) return NUM_MAIN_SLOTS, character.freeslots end,
+				HasPlayerVisitedBank = function(character) return (type(character.freeslots) ~= "nil") end,
+				IteratePlayerBankSlots = _IteratePlayerBankSlots,
 			},
 		},
 	})

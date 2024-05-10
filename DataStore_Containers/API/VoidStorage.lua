@@ -1,3 +1,5 @@
+if WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE then return end
+
 --[[ 
 This file keeps track of a character's Void Storage (Retail + Wrath only)
 --]]
@@ -60,12 +62,16 @@ local function _IterateVoidStorage(character, callback)
 	local itemID
 	
 	for tabID = 1, 2 do
-		for slotID = 1, TAB_SIZE do
-			itemID = character[tabID][slotID]
-			
-			-- Callback only if there is an item in that slot
-			if itemID then
-				callback(itemID)
+		local tab = character[tabID]
+		
+		if tab then
+			for slotID = 1, TAB_SIZE do
+				itemID = character[tabID][slotID]
+				
+				-- Callback only if there is an item in that slot
+				if itemID then
+					callback(itemID)
+				end
 			end
 		end
 	end
@@ -76,6 +82,7 @@ DataStore:OnAddonLoaded(addonName, function()
 		addon = addon,
 		characterTables = {
 			["DataStore_Containers_VoidStorage"] = {
+				GetVoidStorageTab = function(character, tabID) return character[tabID] end,
 				GetVoidStorageItemCount = _GetVoidStorageItemCount,
 				IterateVoidStorage = _IterateVoidStorage,
 			},

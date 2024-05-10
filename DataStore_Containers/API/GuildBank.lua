@@ -192,12 +192,13 @@ local function _GetGuildBankTab(guild, tabID)
 end
 	
 local function _GetGuildBankTabName(guild, tabID)
-	return guild.Tabs[tabID].name
+	if guild.Tabs and guild.Tabs[tabID] then
+		return guild.Tabs[tabID].name
+	end
 end
 
 local function _GetSlotInfo(bag, slotID)
-	assert(type(bag) == "table")		-- this is the pointer to a bag table, obtained through addon:GetContainer()
-	assert(type(slotID) == "number")
+	if not bag then return end
 
 	local link = bag.links[slotID]
 	local isBattlePet
@@ -206,8 +207,15 @@ local function _GetSlotInfo(bag, slotID)
 		isBattlePet = link:match("|Hbattlepet:")
 	end
 	
-	-- return itemID, itemLink, itemCount, isBattlePet
-	return bag.ids[slotID], link, bag.counts[slotID] or 1, isBattlePet
+	local slot = bag.items[slotID]
+	local itemID, count
+	
+	if slot then
+		count = bit64:GetBits(slot, 0, 10)		-- bits 0-9 : item count (10 bits, up to 1024)
+		itemID = bit64:RightShift(slot, 10)		-- bits 10+ : item ID
+	end
+
+	return itemID, link, count, isBattlePet	
 end
 
 local function _IterateGuildBankSlots(guild, callback)
@@ -398,7 +406,7 @@ DataStore:OnPlayerLogin(function()
 		end
 	end)
 	
-	if WOW_PROJECT_ID == WOW_PROJECT_WRATH_CLASSIC then
+	if WOW_PROJECT_ID == WOW_PROJECT_CATACLYSM_CLASSIC then
 		addon:ListenTo("GUILDBANKFRAME_OPENED", OnGuildBankFrameOpened)
 	end
 end)

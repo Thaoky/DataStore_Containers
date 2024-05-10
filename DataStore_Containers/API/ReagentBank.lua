@@ -1,3 +1,5 @@
+if WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE then return end
+
 --[[ 
 This file keeps track of a character's reagent bank (Retail + Wrath only)
 --]]
@@ -90,6 +92,7 @@ DataStore:OnAddonLoaded(addonName, function()
 		addon = addon,
 		characterTables = {
 			["DataStore_Containers_Reagents"] = {
+				GetReagentBank = function(character) return character end,
 				GetReagentBankItemCount = function(character, searchedID) return DataStore:GetItemCountByID(character, searchedID) end,
 			},
 		},
