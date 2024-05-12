@@ -557,7 +557,7 @@ DataStore:OnAddonLoaded(addonName, function()
 				-- retail
 				GetReagentBagItemCount = isRetail and _GetReagentBagItemCount,
 				GetNumPurchasedBankSlots = isRetail and _GetNumPurchasedBankSlots,
-				IterateContainerSlots = isRetail and _IterateContainerSlots,
+				IterateContainerSlots = _IterateContainerSlots,
 				
 				-- non-retail
 				IterateBags = not isRetail and _IterateBags,
