@@ -509,11 +509,16 @@ end
 local function _IterateBags(character, callback)
 	if not character.Containers then return end
 	
+	local stop
 	for containerID, container in pairs(character.Containers) do
-		for slotID = 1, container.size do
-			local itemID = container.ids[slotID]
-			local stop = callback(containerID, container, slotID, itemID)
-			if stop then return end		-- exit if the callback returns true
+		for slotID = 1, _GetContainerSize(character, containerID) do
+			local itemID = _GetSlotInfo(container, slotID)
+			
+			-- Callback only if there is an item in that slot
+			if itemID then
+				stop = callback(containerID, container, slotID, itemID)
+				if stop then return end		-- exit if the callback returns true
+			end
 		end
 	end
 end
