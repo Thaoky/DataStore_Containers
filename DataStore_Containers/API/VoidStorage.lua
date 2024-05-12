@@ -9,17 +9,26 @@ local thisCharacter
 
 local DataStore = DataStore
 local GetVoidItemInfo = GetVoidItemInfo
+local bit64 = LibStub("LibBit64")
+
 local TAB_SIZE = 80
 
 -- *** Scanning functions ***
 local function ScanTab(tabID)
 	-- Get the database
 	thisCharacter[tabID] = thisCharacter[tabID] or {}
+	thisCharacter[tabID].items = thisCharacter[tabID].items or {}
 	local tab = thisCharacter[tabID]
 	
 	-- Get the content
-	for slot = 1, TAB_SIZE do
-		tab[slot] = GetVoidItemInfo(tabID, slot)
+	for slotID = 1, TAB_SIZE do
+		local itemID = GetVoidItemInfo(tabID, slotID)
+		
+		if itemID then
+			tab.items[slotID] = 1 + bit64:LeftShift(itemID, 10)		-- bits 10+ : item ID
+		else
+			tab.items[slotID] = nil
+		end
 	end	
 end
 
@@ -36,20 +45,16 @@ end
 
 -- ** Mixins **
 local function _GetVoidStorageItemCount(character, searchedID)
-	local itemIDs = character.ids
-	local counts = character.counts
 	local count = 0
-	local id
 	
 	for tabID = 1, 2 do
 		local tab = character[tabID]
 		
-		if tab then
-			for slotID = 1, TAB_SIZE do
-				id = tab[slotID]
-				
-				if id and id == searchedID then
-					count = count + 1
+		if tab and tab.items then
+			for slotID, slot in pairs(tab.items) do
+				-- is it the item we are searching for ?
+				if searchedID == bit64:RightShift(slot, 10) then	-- bits 10+ : item ID
+					count = count + bit64:GetBits(slot, 0, 10)		-- bits 0-9 : item count (10 bits, up to 1024)
 				end
 			end
 		end

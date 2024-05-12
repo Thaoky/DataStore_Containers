@@ -415,14 +415,14 @@ local function _GetSlotInfo(bag, slotID)
 	-- assert(type(slotID) == "number")
 	if not bag then return end
 
-	local link = bag.links[slotID]
+	local link = bag.links and bag.links[slotID]
 	local isBattlePet
 	
 	if link then
 		isBattlePet = link:match("|Hbattlepet:")
 	end
 	
-	local slot = bag.items[slotID]
+	local slot = bag.items and bag.items[slotID]
 	local itemID, count
 	
 	if slot then
