@@ -119,9 +119,9 @@ local function ScanGuildBankTab(tabID)
 			
 			tab.links[slotID] = link
 			
-			-- bits 0-9 : item count (10 bits, up to 1024)
+			-- bits 0-15 : item count (16 bits, up to 65535)
 			tab.items[slotID] = select(2, GetGuildBankItemInfo(tabID, slotID))
-				+ bit64:LeftShift(itemID, 10)		-- bits 10+ : item ID
+				+ bit64:LeftShift(itemID, 16)		-- bits 16+ : item ID
 		end
 	end
 
@@ -176,10 +176,12 @@ local function _GetGuildBankItemCount(guild, searchedID)
 	
 	for _, container in pairs(guild.Tabs) do
 	   for slotID, slot in pairs(container.items) do
+			local version = bit64:GetBits(slot, 11, 5)
+			local pos = version == 0 and 16 or 10
 			
 			-- is it the item we are searching for ?
-			if searchedID == bit64:RightShift(slot, 10) then	-- bits 10+ : item ID
-				count = count + bit64:GetBits(slot, 0, 10)		-- bits 0-9 : item count (10 bits, up to 1024)
+			if searchedID == bit64:RightShift(slot, pos) then	-- bits 10+ : item ID
+				count = count + bit64:GetBits(slot, 0, pos)		-- bits 0-9 : item count (10 bits, up to 1024)
 			end
 	   end
 	end
@@ -211,8 +213,11 @@ local function _GetSlotInfo(bag, slotID)
 	local itemID, count
 	
 	if slot then
-		count = bit64:GetBits(slot, 0, 10)		-- bits 0-9 : item count (10 bits, up to 1024)
-		itemID = bit64:RightShift(slot, 10)		-- bits 10+ : item ID
+		local version = bit64:GetBits(slot, 11, 5)
+		local pos = version == 0 and 16 or 10
+		
+		count = bit64:GetBits(slot, 0, pos)			-- bits 0-9 : item count (10 bits, up to 1024)
+		itemID = bit64:RightShift(slot, pos)		-- bits 10+ : item ID
 	end
 
 	return itemID, link, count, isBattlePet	
@@ -241,10 +246,12 @@ local function _GetGuildBankTabItemCount(guild, tabID, searchedID)
 	
 	if container then
 	   for slotID, slot in pairs(container.items) do
+			local version = bit64:GetBits(slot, 11, 5)
+			local pos = version == 0 and 16 or 10
 			
 			-- is it the item we are searching for ?
-			if searchedID == bit64:RightShift(slot, 10) then	-- bits 10+ : item ID
-				count = count + bit64:GetBits(slot, 0, 10)		-- bits 0-9 : item count (10 bits, up to 1024)
+			if searchedID == bit64:RightShift(slot, pos) then	-- bits 10+ : item ID
+				count = count + bit64:GetBits(slot, 0, pos)		-- bits 0-9 : item count (10 bits, up to 1024)
 			end
 	   end
 	end

@@ -34,9 +34,9 @@ local function ScanReagentBankSlot(storage, slotID)
 	if link then
 		local itemID = tonumber(link:match("item:(%d+)"))
 		
-		-- bits 0-9 : item count (10 bits, up to 1024)
+		-- bits 0-15 : item count (16 bits, up to 65535)
 		storage.items[slotID] = C_Container.GetContainerItemInfo(REAGENTBANK_CONTAINER, slotID).stackCount
-			+ bit64:LeftShift(itemID, 10)		-- bits 10+ : item ID
+			+ bit64:LeftShift(itemID, 16)		-- bits 16+ : item ID
 	else
 		storage.items[slotID] = nil
 	end

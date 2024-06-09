@@ -95,9 +95,9 @@ local function ScanContainer(bagID, bagSize)
 			
 			bag.links[slotID] = link
 		
-			-- bits 0-9 : item count (10 bits, up to 1024)
+			-- bits 0-15 : item count (16 bits, up to 65535)
 			bag.items[slotID] = C_Container.GetContainerItemInfo(bagID, slotID).stackCount
-				+ bit64:LeftShift(itemID, 10)		-- bits 10+ : item ID
+				+ bit64:LeftShift(itemID, 16)		-- bits 16+ : item ID
 		end
 		
 		startTime, duration, isEnabled = C_Container.GetContainerItemCooldown(bagID, slotID)
@@ -426,8 +426,11 @@ local function _GetSlotInfo(bag, slotID)
 	local itemID, count
 	
 	if slot then
-		count = bit64:GetBits(slot, 0, 10)		-- bits 0-9 : item count (10 bits, up to 1024)
-		itemID = bit64:RightShift(slot, 10)		-- bits 10+ : item ID
+		local version = bit64:GetBits(slot, 11, 5)
+		local pos = version == 0 and 16 or 10
+		
+		count = bit64:GetBits(slot, 0, pos)			-- bits 0-9 : item count (10 bits, up to 1024)
+		itemID = bit64:RightShift(slot, pos)		-- bits 10+ : item ID
 	end
 
 	return itemID, link, count, isBattlePet
@@ -454,12 +457,26 @@ local function _GetContainerCooldownInfo(bagID, slotID)
 end
 
 local function _GetItemCountByID(container, searchedID)
+	--[[ The item count used to be saved (in the rewrite of 10.2.013) in 10 bits, up to 1024.
+			It turns out stacks could be higher than that (2000). 
+			To prevent users from having to logon with all their alts again, the fix will work as follows:
+			
+			We will use 16 bits for the count, more than enough but we never know.
+			The database will contain both old & new formats (10 & 16 bits), so we will test the value between bits 11 & 15 (only 10 should be used)
+			and if that value is higher than 0, we have the old format. If it is 0, we have the new format.
+			
+			After a few updates, we can get rid of the temporary fix, and use only the new format.
+	--]]
+	
 	local count = 0
 	
 	for slotID, slot in pairs(container.items) do
+		local version = bit64:GetBits(slot, 11, 5)
+		local pos = version == 0 and 16 or 10
+		
 		-- is it the item we are searching for ?
-		if searchedID == bit64:RightShift(slot, 10) then	-- bits 10+ : item ID
-			count = count + bit64:GetBits(slot, 0, 10)		-- bits 0-9 : item count (10 bits, up to 1024)
+		if searchedID == bit64:RightShift(slot, pos) then	-- bits 10+ : item ID
+			count = count + bit64:GetBits(slot, 0, pos)		-- bits 0-9 : item count (10 bits, up to 1024)
 		end
 	end
 

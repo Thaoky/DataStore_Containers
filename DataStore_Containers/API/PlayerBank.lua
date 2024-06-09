@@ -54,9 +54,9 @@ local function ScanMainSlots()
 			
 			bag.links[slotID] = link
 			
-			-- bits 0-9 : item count (10 bits, up to 1024)
+			-- bits 0-15 : item count (16 bits, up to 65535)
 			bag.items[slotID] = C_Container.GetContainerItemInfo(enum.MainBankSlots, slotID).stackCount
-				+ bit64:LeftShift(itemID, 10)		-- bits 10+ : item ID
+				+ bit64:LeftShift(itemID, 16)		-- bits 16+ : item ID
 		end
 		
 
@@ -114,8 +114,11 @@ local function _GetSlotInfo(bag, slotID)
 	local itemID, count
 	
 	if slot then
-		count = bit64:GetBits(slot, 0, 10)		-- bits 0-9 : item count (10 bits, up to 1024)
-		itemID = bit64:RightShift(slot, 10)		-- bits 10+ : item ID
+		local version = bit64:GetBits(slot, 11, 5)
+		local pos = version == 0 and 16 or 10
+	
+		count = bit64:GetBits(slot, 0, pos)		-- bits 0-9 : item count (10 bits, up to 1024)
+		itemID = bit64:RightShift(slot, pos)		-- bits 10+ : item ID
 	end
 
 	return itemID, link, count, isBattlePet

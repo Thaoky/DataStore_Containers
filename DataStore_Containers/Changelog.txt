@@ -2,6 +2,10 @@ DataStore Changelog (dates in dd/mm/yyyy)
 ===================
 
 
+Version 2024.06.09 (09/06/2024)
+
+- Fixed the count of items which can be stacked by more than 1023 (such as the Polished Pet Charm).
+
 Version 2024.05.20 (05/20/2024)
 
 - Stopped using Ace libraries
