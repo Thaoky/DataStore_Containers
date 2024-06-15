@@ -114,8 +114,7 @@ local function _GetSlotInfo(bag, slotID)
 	local itemID, count
 	
 	if slot then
-		local version = bit64:GetBits(slot, 11, 5)
-		local pos = version == 0 and 16 or 10
+		local pos = DataStore:GetItemCountPosition(slot)
 	
 		count = bit64:GetBits(slot, 0, pos)		-- bits 0-9 : item count (10 bits, up to 1024)
 		itemID = bit64:RightShift(slot, pos)		-- bits 10+ : item ID
