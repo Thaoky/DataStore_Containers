@@ -4,6 +4,10 @@ DataStore Changelog (dates in dd/mm/yyyy)
 
 Version 2024.06.16 (16/06/2024)
 
+- Item count now properly fixed.
+
+Version 2024.06.16 (16/06/2024)
+
 - Reverting yesterday's change, needs further analysis.
 
 Version 2024.06.15 (15/06/2024)
