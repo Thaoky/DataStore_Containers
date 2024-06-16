@@ -422,7 +422,7 @@ local function _GetItemCountPosition(slot)
 			After a few updates, we can get rid of the temporary fix, and use only the new format.
 	--]]
 
-	local version = bit64:GetBits(slot, 13, 5)
+	local version = bit64:GetBits(slot, 11, 5)
 	return version == 0 and 16 or 10
 end
 
