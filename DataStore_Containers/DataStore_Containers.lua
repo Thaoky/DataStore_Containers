@@ -612,9 +612,10 @@ DataStore:OnPlayerLogin(function()
 	end)
 
 	-- Only for Classic & BC, scan the keyring
-	if not isRetail and HasKey() then
-		ScanBag(enum.Keyring)
-	end
+	-- 2024/06/20 : not for Cata either, see later what we do for Classic
+	-- if not isRetail and HasKey() then
+		-- ScanBag(enum.Keyring)
+	-- end
 	
 	addon:ListenTo("BANKFRAME_OPENED", OnBankFrameOpened)
 	

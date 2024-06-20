@@ -2,6 +2,10 @@ DataStore Changelog (dates in dd/mm/yyyy)
 ===================
 
 
+Version 2024.06.20 (20/06/2024)
+
+- Disabled the scanning of the keyring (Cataclysm).
+
 Version 2024.06.16 (16/06/2024)
 
 - Item count now properly fixed.
