@@ -264,7 +264,9 @@ local function _GetContainers(character)
 end
 
 local function _GetNumBagSlots(character)
-	return bit64:GetBits(character.bagInfo, 0, 10)		-- bits 0-9 : num bag slots
+	return character.bagInfo
+		and bit64:GetBits(character.bagInfo, 0, 10)		-- bits 0-9 : num bag slots
+		or 0
 end
 
 local function _GetNumFreeBagSlots(character)
