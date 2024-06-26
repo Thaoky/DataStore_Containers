@@ -13,6 +13,7 @@ local enum = DataStore.Enum.ContainerIDs
 local bit64 = LibStub("LibBit64")
 
 local NUM_MAIN_SLOTS = 28
+local BANK_TAG = "Bank"
 
 local function GetRemainingCooldown(start)
    local uptime = GetTime()
@@ -80,8 +81,8 @@ end
 
 -- *** Event Handlers ***
 local function OnBankFrameClosed()
-	addon:StopListeningTo("BANKFRAME_CLOSED")
-	addon:StopListeningTo("PLAYERBANKSLOTS_CHANGED")
+	addon:StopListeningTo("BANKFRAME_CLOSED", BANK_TAG)
+	addon:StopListeningTo("PLAYERBANKSLOTS_CHANGED", BANK_TAG)
 end
 
 local function OnPlayerBankSlotsChanged(event, slotID)
@@ -93,8 +94,8 @@ end
 local function OnBankFrameOpened()
 	ScanMainSlots()
 
-	addon:ListenTo("BANKFRAME_CLOSED", OnBankFrameClosed)
-	addon:ListenTo("PLAYERBANKSLOTS_CHANGED", OnPlayerBankSlotsChanged)
+	addon:ListenTo("BANKFRAME_CLOSED", OnBankFrameClosed, BANK_TAG)
+	addon:ListenTo("PLAYERBANKSLOTS_CHANGED", OnPlayerBankSlotsChanged, BANK_TAG)
 end
 
 -- ** Mixins **
@@ -157,5 +158,5 @@ DataStore:OnAddonLoaded(addonName, function()
 end)
 
 DataStore:OnPlayerLogin(function()
-	addon:ListenTo("BANKFRAME_OPENED", OnBankFrameOpened)
+	addon:ListenTo("BANKFRAME_OPENED", OnBankFrameOpened, BANK_TAG)
 end)

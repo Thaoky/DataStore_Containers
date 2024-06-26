@@ -189,6 +189,7 @@ end
 
 -- *** Event Handlers ***
 local isBankOpen
+local MAIN_TAG = "Main"
 
 local function OnBagUpdate(event, bag)
 	-- if we get an update for a bank bag but the bank is not open, exit
@@ -203,8 +204,8 @@ end
 
 local function OnBankFrameClosed()
 	isBankOpen = nil
-	addon:StopListeningTo("BANKFRAME_CLOSED")
-	addon:StopListeningTo("PLAYERBANKSLOTS_CHANGED")
+	addon:StopListeningTo("BANKFRAME_CLOSED", MAIN_TAG)
+	addon:StopListeningTo("PLAYERBANKSLOTS_CHANGED", MAIN_TAG)
 end
 
 local function OnPlayerBankSlotsChanged(event, slotID)
@@ -223,8 +224,8 @@ local function OnBankFrameOpened()
 	end
 	
 	ScanBankSlotsInfo()
-	addon:ListenTo("BANKFRAME_CLOSED", OnBankFrameClosed)
-	addon:ListenTo("PLAYERBANKSLOTS_CHANGED", OnPlayerBankSlotsChanged)
+	addon:ListenTo("BANKFRAME_CLOSED", OnBankFrameClosed, MAIN_TAG)
+	addon:ListenTo("PLAYERBANKSLOTS_CHANGED", OnPlayerBankSlotsChanged, MAIN_TAG)
 end
 
 local function OnAuctionMultiSellStart()
@@ -619,7 +620,7 @@ DataStore:OnPlayerLogin(function()
 		-- ScanBag(enum.Keyring)
 	-- end
 	
-	addon:ListenTo("BANKFRAME_OPENED", OnBankFrameOpened)
+	addon:ListenTo("BANKFRAME_OPENED", OnBankFrameOpened, MAIN_TAG)
 	
 	-- disable bag updates during multi sell at the AH
 	addon:ListenTo("AUCTION_HOUSE_SHOW", OnAuctionHouseShow)
