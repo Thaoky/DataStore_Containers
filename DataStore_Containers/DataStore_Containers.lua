@@ -73,7 +73,7 @@ local function ScanContainer(bagID, bagSize)
 
 	local link, itemID
 	local startTime, duration, isEnabled
-	
+
 	for slotID = 1, bagSize do
 		link = C_Container.GetContainerItemLink(bagID, slotID)
 		
@@ -159,10 +159,18 @@ end
 local function ScanBag(bagID)
 	-- https://wowpedia.fandom.com/wiki/BagID
 	local bag = GetContainer(bagID)
+
+	-- The keyring has disappeared in Cataclysm, but it gets an "update" that looks like it's the backpack
+	-- If WoW says the keyring is being updated, ignore the request and wipe the keyring info
+	if bagID == enum.Keyring then
+		wipe(bag.items)
+		wipe(bag.links)
+		return
+	end
 	
 	local icon = bagID > 0 and GetInventoryItemTexture("player", C_Container.ContainerIDToInventoryID(bagID))
 	bag.link = bagID > 0 and GetInventoryItemLink("player", C_Container.ContainerIDToInventoryID(bagID))
-	
+
 	local rarity = bag.link and select(3, GetItemInfo(bag.link))
 	local size = C_Container.GetContainerNumSlots(bagID)
 	
@@ -609,6 +617,7 @@ DataStore:OnPlayerLogin(function()
 		for bagID = 0, COMMON_NUM_BAG_SLOTS do
 			ScanBag(bagID)
 		end
+		ScanBag(enum.Keyring)	-- Special call to the now non-existent keyring to wipe it
 
 		-- .. then register the event
 		addon:ListenTo("BAG_UPDATE", OnBagUpdate)
