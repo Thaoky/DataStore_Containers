@@ -2,6 +2,10 @@ DataStore Changelog (dates in dd/mm/yyyy)
 ===================
 
 
+Version 2024.07.28 (28/07/2024)
+
+- ToC Update.
+
 Version 2024.06.26 (26/06/2024)
 
 - Fixed a nasty bug when leaving the bank, unregistering the event was not properly done by DataStore (and scope Tag was missing).
