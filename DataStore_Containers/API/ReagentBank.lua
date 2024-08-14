@@ -28,19 +28,16 @@ end
 local TAB_SIZE = 98
 
 local function ScanReagentBankSlot(storage, slotID)
-	-- Set the link (possibly nil)
-	local link = C_Container.GetContainerItemLink(REAGENT_BANK, slotID)
-	storage.links[slotID] = link
+	local info = C_Container.GetContainerItemInfo(REAGENT_BANK, slotID)
+	if not info then return end
 	
-	if link then
-		local itemID = tonumber(link:match("item:(%d+)"))
-		
-		-- bits 0-15 : item count (16 bits, up to 65535)
-		storage.items[slotID] = C_Container.GetContainerItemInfo(REAGENT_BANK, slotID).stackCount
-			+ bit64:LeftShift(itemID, 16)		-- bits 16+ : item ID
-	else
-		storage.items[slotID] = nil
-	end
+	storage.items[slotID] = info.stackCount
+	-- bits 0-15 : item count (16 bits, up to 65535)
+	storage.items[slotID] = info.stackCount
+		+ bit64:LeftShift(info.itemID, 16)		-- bits 16+ : item ID	
+
+	-- Set the link (possibly nil)
+	storage.links[slotID] = C_Container.GetContainerItemLink(REAGENT_BANK, slotID)
 end
 
 local function ScanReagentBankSlotCooldown(slotID)
@@ -117,4 +114,5 @@ DataStore:OnPlayerLogin(function()
 	
 	-- Retail only
 	addon:ListenTo("PLAYERREAGENTBANKSLOTS_CHANGED", OnPlayerReagentBankSlotsChanged)
+	
 end)

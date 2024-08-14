@@ -4,6 +4,11 @@ DataStore Changelog (dates in dd/mm/yyyy)
 
 Version 2024.08.14 (14/08/2024)
 
+- Fixed a lua error when changing the settings of an account bank tab.
+- Fixed an issue that deletes the content of the reagent bank at logon.
+
+Version 2024.08.14 (14/08/2024)
+
 - ToC Update.
 - Added support for the warband bank.
 

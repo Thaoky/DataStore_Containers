@@ -93,7 +93,7 @@ local function OnAccountBankTabsChanged(event, tabID)
 end
 
 local function OnBankTabSettingsUpdated(event, tabID)
-	ScanAccountBankTabSettings(tabID)
+	ScanAccountBank()
 end
 
 -- ** Mixins **
