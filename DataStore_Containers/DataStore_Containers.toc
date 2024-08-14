@@ -1,12 +1,12 @@
-## Interface: 110000, 40400, 11502
+## Interface: 110002, 40400, 11502
 ## Title: DataStore_Containers
 ## IconTexture: Interface\Icons\garrison_building_storehouse
 
 ## Notes: Stores information about character bags, bank, and guild banks
 ## Author: Thaoky (EU-Marécages de Zangar)
-## Version: 2024.07.28
+## Version: 2024.08.14
 ## Dependencies: DataStore
-## SavedVariables: DataStore_Containers_Characters, DataStore_Containers_Banks, DataStore_Containers_Guilds, DataStore_Containers_Reagents, DataStore_Containers_VoidStorage, DataStore_Containers_Keystones, DataStore_Containers_BankTypes
+## SavedVariables: DataStore_Containers_Characters, DataStore_Containers_Banks, DataStore_Containers_Guilds, DataStore_Containers_Reagents, DataStore_Containers_VoidStorage, DataStore_Containers_Keystones, DataStore_Containers_BankTypes, DataStore_Containers_Warbank
 ## X-Category: Interface Enhancements
 
 Enum.lua
@@ -17,3 +17,4 @@ API\PlayerBank.lua
 API\ReagentBank.lua
 API\VoidStorage.lua
 API\Keystones.lua
+API\WarbandBank.lua

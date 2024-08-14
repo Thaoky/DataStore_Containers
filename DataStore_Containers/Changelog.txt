@@ -2,6 +2,11 @@ DataStore Changelog (dates in dd/mm/yyyy)
 ===================
 
 
+Version 2024.08.14 (14/08/2024)
+
+- ToC Update.
+- Added support for the warband bank.
+
 Version 2024.07.28 (28/07/2024)
 
 - ToC Update.

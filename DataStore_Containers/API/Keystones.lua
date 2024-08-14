@@ -29,9 +29,16 @@ local function ScanKeystoneInfo()
 end
 
 -- *** Event Handlers ***
+local function OnBagUpdate(event, bag)
+	-- bag id >= 13 are the warband bank, don't react on those.
+	if bag < 13 then
+		ScanKeystoneInfo()
+	end
+end
+
 local function OnAuctionHouseClosed()
 	addon:StopListeningTo("AUCTION_HOUSE_CLOSED")
-	addon:ListenTo("BAG_UPDATE", ScanKeystoneInfo, EVENT_TAG)		-- resume listening
+	addon:ListenTo("BAG_UPDATE", OnBagUpdate, EVENT_TAG)		-- resume listening
 end
 
 local function OnAuctionHouseShow()
@@ -57,7 +64,7 @@ end)
 DataStore:OnPlayerLogin(function()
 	addon:ListenTo("PLAYER_ALIVE", ScanKeystoneInfo)
 	addon:ListenTo("WEEKLY_REWARDS_UPDATE", ScanKeystoneInfo)
-	addon:ListenTo("BAG_UPDATE", ScanKeystoneInfo, EVENT_TAG)	-- Give a tag to ensure uniqueness when removing
+	addon:ListenTo("BAG_UPDATE", OnBagUpdate, EVENT_TAG)	-- Give a tag to ensure uniqueness when removing
 	
 	-- disable bag updates during multi sell at the AH
 	addon:ListenTo("AUCTION_HOUSE_SHOW", OnAuctionHouseShow)

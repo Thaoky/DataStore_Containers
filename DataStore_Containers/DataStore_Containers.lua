@@ -15,7 +15,7 @@ local thisCharacter
 local thisCharacterBank
 
 local DataStore, tonumber, wipe, type, time, C_Container = DataStore, tonumber, wipe, type, time, C_Container
-local GetTime, GetInventoryItemTexture, GetInventoryItemLink, GetItemInfo, GetItemSubClassInfo = GetTime, GetInventoryItemTexture, GetInventoryItemLink, GetItemInfo, GetItemSubClassInfo
+local GetTime, GetInventoryItemTexture, GetInventoryItemLink, GetItemInfo = GetTime, GetInventoryItemTexture, GetInventoryItemLink, GetItemInfo
 local log = math.log
 local isRetail = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
 
@@ -26,6 +26,7 @@ local bit64 = LibStub("LibBit64")
 local COMMON_NUM_BAG_SLOTS = isRetail and NUM_BAG_SLOTS + 1 or NUM_BAG_SLOTS
 local MIN_BANK_SLOT = isRetail and 6 or 5		-- Bags 6 - 12 are Bank as of 10.0
 local MAX_BANK_SLOT = isRetail and 12 or 11
+local MIN_WARBANK_TAB = 13
 
 
 -- *** Utility functions ***
@@ -197,7 +198,7 @@ local function OnBagUpdate(event, bag)
 		return
 	end
 
-	if bag == enum.Keyring or bag >= 0 then
+	if bag == enum.Keyring or (bag >= 0 and bag < MIN_WARBANK_TAB) then
 		ScanBag(bag)
 	end
 end
@@ -316,14 +317,14 @@ if isRetail then
 	bagTypeStrings = {
 		-- [1] = "Quiver",
 		-- [2] = "Ammo Pouch",
-		[4] = GetItemSubClassInfo(Enum.ItemClass.Container, 1), -- "Soul Bag",
-		[8] = GetItemSubClassInfo(Enum.ItemClass.Container, 7), -- "Leatherworking Bag",
-		[16] = GetItemSubClassInfo(Enum.ItemClass.Container, 8), -- "Inscription Bag",
-		[32] = GetItemSubClassInfo(Enum.ItemClass.Container, 2), -- "Herb Bag"
-		[64] = GetItemSubClassInfo(Enum.ItemClass.Container, 3), -- "Enchanting Bag",
-		[128] = GetItemSubClassInfo(Enum.ItemClass.Container, 4), -- "Engineering Bag",
-		[512] = GetItemSubClassInfo(Enum.ItemClass.Container, 5), -- "Gem Bag",
-		[1024] = GetItemSubClassInfo(Enum.ItemClass.Container, 6), -- "Mining Bag",
+		[4] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 1), -- "Soul Bag",
+		[8] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 7), -- "Leatherworking Bag",
+		[16] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 8), -- "Inscription Bag",
+		[32] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 2), -- "Herb Bag"
+		[64] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 3), -- "Enchanting Bag",
+		[128] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 4), -- "Engineering Bag",
+		[512] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 5), -- "Gem Bag",
+		[1024] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 6), -- "Mining Bag",
 	}
 	
 	bagIcons[REAGENTBANK_CONTAINER] = "Interface\\Icons\\inv_misc_bag_satchelofcenarius"
@@ -332,14 +333,14 @@ else
 	bagTypeStrings = {
 		[1] = "Quiver",
 		[2] = "Ammo Pouch",
-		[4] = GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER, 1), -- "Soul Bag",
-		[8] = GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER, 7), -- "Leatherworking Bag",
-		[16] = GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER, 8), -- "Inscription Bag",
-		[32] = GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER, 2), -- "Herb Bag"
-		[64] = GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER, 3), -- "Enchanting Bag",
-		[128] = GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER, 4), -- "Engineering Bag",
-		[512] = GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER, 5), -- "Gem Bag",
-		[1024] = GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER, 6), -- "Mining Bag",
+		[4] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER, 1), -- "Soul Bag",
+		[8] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER, 7), -- "Leatherworking Bag",
+		[16] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER, 8), -- "Inscription Bag",
+		[32] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER, 2), -- "Herb Bag"
+		[64] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER, 3), -- "Enchanting Bag",
+		[128] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER, 4), -- "Engineering Bag",
+		[512] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER, 5), -- "Gem Bag",
+		[1024] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER, 6), -- "Mining Bag",
 	}
 end
 
