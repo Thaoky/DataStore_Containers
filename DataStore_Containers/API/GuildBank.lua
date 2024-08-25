@@ -238,6 +238,12 @@ local function _IterateGuildBankSlots(guild, callback)
 	end
 end
 
+local function _DeleteGuildBank(guild)
+	guild.Tabs = {}
+	guild.money = nil
+	guild.faction = nil
+end
+
 local function _GetGuildBankTabItemCount(guild, tabID, searchedID)
 	local count = 0
 	local container = guild.Tabs[tabID]
@@ -375,6 +381,7 @@ DataStore:OnAddonLoaded(addonName, function()
 				GetGuildBankMoney = function(guild) return guild.money end,
 				GetGuildBankFaction = function(guild) return guild.faction end,
 				ImportGuildBankTab = _ImportGuildBankTab,
+				DeleteGuildBank = _DeleteGuildBank,
 			},
 		},
 	})
