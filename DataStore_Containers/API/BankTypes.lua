@@ -54,7 +54,7 @@ local function _GetBankTypes(characterID)
 	return TableConcat(bankTypeLabels, ", "), bankTypeLabels
 end
 
-DataStore:OnAddonLoaded(addonName, function() 
+AddonFactory:OnAddonLoaded(addonName, function() 
 	DataStore:RegisterTables({
 		addon = addon,
 		characterIdTables = {

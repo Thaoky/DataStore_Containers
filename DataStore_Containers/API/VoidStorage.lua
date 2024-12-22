@@ -82,7 +82,7 @@ local function _IterateVoidStorage(character, callback)
 	end
 end
 
-DataStore:OnAddonLoaded(addonName, function() 
+AddonFactory:OnAddonLoaded(addonName, function() 
 	DataStore:RegisterTables({
 		addon = addon,
 		characterTables = {
@@ -97,7 +97,7 @@ DataStore:OnAddonLoaded(addonName, function()
 	thisCharacter = DataStore:GetCharacterDB("DataStore_Containers_VoidStorage", true)
 end)
 
-DataStore:OnPlayerLogin(function()
+AddonFactory:OnPlayerLogin(function()
 	addon:ListenTo("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", function(event, interactionType)
 		-- only process void storage events
 		if interactionType ~= Enum.PlayerInteractionType.VoidStorageBanker then return end

@@ -120,7 +120,7 @@ local function _GetAccountBankTabItemCount(tabID, searchedID)
 end
 
 
-DataStore:OnAddonLoaded(addonName, function() 
+AddonFactory:OnAddonLoaded(addonName, function() 
 	DataStore:RegisterTables({
 		addon = addon,
 		rawTables = {
@@ -135,7 +135,7 @@ DataStore:OnAddonLoaded(addonName, function()
 	
 end)
 
-DataStore:OnPlayerLogin(function()
+AddonFactory:OnPlayerLogin(function()
 	C_Timer.After(3, function()
 		-- To avoid the long list of BAG_UPDATE at startup, only register the event 3 seconds later ..
 		addon:ListenTo("BAG_UPDATE", OnBagUpdate)

@@ -135,7 +135,7 @@ local function _IteratePlayerBankSlots(character, callback)
 	end
 end
 
-DataStore:OnAddonLoaded(addonName, function() 
+AddonFactory:OnAddonLoaded(addonName, function() 
 	DataStore:RegisterTables({
 		addon = addon,
 		characterTables = {
@@ -157,6 +157,6 @@ DataStore:OnAddonLoaded(addonName, function()
 	thisCharacterCooldowns = db.Cooldowns
 end)
 
-DataStore:OnPlayerLogin(function()
+AddonFactory:OnPlayerLogin(function()
 	addon:ListenTo("BANKFRAME_OPENED", OnBankFrameOpened, BANK_TAG)
 end)

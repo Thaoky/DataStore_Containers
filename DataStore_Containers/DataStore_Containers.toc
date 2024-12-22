@@ -1,11 +1,11 @@
-## Interface: 110005, 40400, 11502
+## Interface: 110007, 40400, 11502
 ## Title: DataStore_Containers
 ## IconTexture: Interface\Icons\garrison_building_storehouse
 
 ## Notes: Stores information about character bags, bank, and guild banks
 ## Author: Thaoky (EU-Marécages de Zangar)
-## Version: 2024.11.11
-## Dependencies: DataStore
+## Version: 2024.12.22
+## Dependencies: AddonFactory, DataStore
 ## SavedVariables: DataStore_Containers_Characters, DataStore_Containers_Banks, DataStore_Containers_Guilds, DataStore_Containers_Reagents, DataStore_Containers_VoidStorage, DataStore_Containers_Keystones, DataStore_Containers_BankTypes, DataStore_Containers_Warbank
 ## X-Category: Interface Enhancements
 

@@ -47,7 +47,7 @@ local function OnAuctionHouseShow()
 end
 
 
-DataStore:OnAddonLoaded(addonName, function() 
+AddonFactory:OnAddonLoaded(addonName, function() 
 	DataStore:RegisterTables({
 		addon = addon,
 		characterTables = {
@@ -61,7 +61,7 @@ DataStore:OnAddonLoaded(addonName, function()
 	thisCharacter = DataStore:GetCharacterDB("DataStore_Containers_Keystones", true)
 end)
 
-DataStore:OnPlayerLogin(function()
+AddonFactory:OnPlayerLogin(function()
 	addon:ListenTo("PLAYER_ALIVE", ScanKeystoneInfo)
 	addon:ListenTo("WEEKLY_REWARDS_UPDATE", ScanKeystoneInfo)
 	addon:ListenTo("BAG_UPDATE", OnBagUpdate, EVENT_TAG)	-- Give a tag to ensure uniqueness when removing

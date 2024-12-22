@@ -366,7 +366,7 @@ local commCallbacks = {
 }
 
 
-DataStore:OnAddonLoaded(addonName, function() 
+AddonFactory:OnAddonLoaded(addonName, function() 
 	DataStore:RegisterTables({
 		addon = addon,
 		guildTables = {
@@ -404,7 +404,7 @@ DataStore:OnAddonLoaded(addonName, function()
 	DataStore:OnGuildComm(commPrefix, DataStore:GetGuildCommHandler())
 end)
 
-DataStore:OnPlayerLogin(function()
+AddonFactory:OnPlayerLogin(function()
 	addon:ListenTo("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", function(event, interactionType)
 		if interactionType == Enum.PlayerInteractionType.GuildBanker then 
 			OnGuildBankFrameOpened()

@@ -557,7 +557,7 @@ local function _SearchBagsForItem(character, searchedItemID, onItemFound)
 end
 
 
-DataStore:OnAddonLoaded(addonName, function()
+AddonFactory:OnAddonLoaded(addonName, function()
 	DataStore:RegisterModule({
 		addon = addon,
 		addonName = addonName,
@@ -604,7 +604,7 @@ DataStore:OnAddonLoaded(addonName, function()
 	DataStore:RegisterMethod(addon, "GetContainerCooldownInfo", _GetContainerCooldownInfo)
 end)
 
-DataStore:OnPlayerLogin(function()
+AddonFactory:OnPlayerLogin(function()
 	C_Timer.After(3, function()
 		-- To avoid the long list of BAG_UPDATE at startup, make the initial scan 3 seconds later ..
 		for bagID = 0, COMMON_NUM_BAG_SLOTS do

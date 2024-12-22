@@ -85,7 +85,7 @@ local function OnPlayerReagentBankSlotsChanged(event, slotID)
 end
 
 
-DataStore:OnAddonLoaded(addonName, function() 
+AddonFactory:OnAddonLoaded(addonName, function() 
 	DataStore:RegisterTables({
 		addon = addon,
 		characterTables = {
@@ -104,7 +104,7 @@ DataStore:OnAddonLoaded(addonName, function()
 	thisCharacterCooldowns = db.Cooldowns
 end)
 
-DataStore:OnPlayerLogin(function()
+AddonFactory:OnPlayerLogin(function()
 	-- Retail + Wrath
 	addon:ListenTo("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", function(event, interactionType)
 		if interactionType == Enum.PlayerInteractionType.Banker then 
