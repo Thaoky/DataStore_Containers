@@ -72,7 +72,7 @@ local function SaveBankTimestamps(sender, timestamps)
 		tab.serverHour = tonumber(serverHour)
 		tab.serverMinute = tonumber(serverMinute)
 	end
-	DataStore:Broadcast("DATASTORE_GUILD_BANKTABS_UPDATED", sender)
+	AddonFactory:Broadcast("DATASTORE_GUILD_BANKTABS_UPDATED", sender)
 end
 
 local function GetBankTab(tabID)
@@ -125,7 +125,7 @@ local function ScanGuildBankTab(tabID)
 		end
 	end
 
-	DataStore:Broadcast("DATASTORE_CONTAINER_UPDATED", tabID, 3)		-- 3 = container type: Guild Bank Tab
+	AddonFactory:Broadcast("DATASTORE_CONTAINER_UPDATED", tabID, 3)		-- 3 = container type: Guild Bank Tab
 end
 
 local function ScanGuildBankTabInfo(tabID)
@@ -324,7 +324,7 @@ end
 
 local function OnGuildMemberOffline(self, member)
 	guildMembers[member] = nil
-	DataStore:Broadcast("DATASTORE_GUILD_BANKTABS_UPDATED", member)
+	AddonFactory:Broadcast("DATASTORE_GUILD_BANKTABS_UPDATED", member)
 end
 
 local commCallbacks = {
@@ -343,13 +343,13 @@ local commCallbacks = {
 	[MSG_BANKTAB_REQUEST] = function(sender, tabName)
 			-- trigger the event only, actual response (ack or not) must be handled by client addons
 			DataStore:GuildWhisper(commPrefix, sender, MSG_BANKTAB_REQUEST_ACK)		-- confirm that the request has been received
-			DataStore:Broadcast("DATASTORE_BANKTAB_REQUESTED", sender, tabName)
+			AddonFactory:Broadcast("DATASTORE_BANKTAB_REQUESTED", sender, tabName)
 		end,
 	[MSG_BANKTAB_REQUEST_ACK] = function(sender)
-			DataStore:Broadcast("DATASTORE_BANKTAB_REQUEST_ACK", sender)
+			AddonFactory:Broadcast("DATASTORE_BANKTAB_REQUEST_ACK", sender)
 		end,
 	[MSG_BANKTAB_REQUEST_REJECTED] = function(sender)
-			DataStore:Broadcast("DATASTORE_BANKTAB_REQUEST_REJECTED", sender)
+			AddonFactory:Broadcast("DATASTORE_BANKTAB_REQUEST_REJECTED", sender)
 		end,
 	[MSG_BANKTAB_TRANSFER] = function(sender, data)
 			local guildName = GetGuildInfo("player")
@@ -358,7 +358,7 @@ local commCallbacks = {
 			for tabID, tab in pairs(guild.Tabs) do
 				if tab.name == data.name then	-- this is the tab being updated
 					_ImportGuildBankTab(guild, tabID, data)
-					DataStore:Broadcast("DATASTORE_BANKTAB_UPDATE_SUCCESS", sender, guildName, data.name, tabID)
+					AddonFactory:Broadcast("DATASTORE_BANKTAB_UPDATE_SUCCESS", sender, guildName, data.name, tabID)
 					DataStore:GuildBroadcast(commPrefix, MSG_SEND_BANK_TIMESTAMPS, GetBankTimestamps(guildName))
 				end
 			end

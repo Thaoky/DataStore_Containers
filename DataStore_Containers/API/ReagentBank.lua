@@ -72,7 +72,7 @@ local function ScanReagentBank()
 		ScanReagentBankSlotCooldown(slotID)
 	end
 	
-	DataStore:Broadcast("DATASTORE_CONTAINER_UPDATED", bagID, 1)		-- 1 = container type: Bag
+	AddonFactory:Broadcast("DATASTORE_CONTAINER_UPDATED", bagID, 1)		-- 1 = container type: Bag
 end
 
 -- *** Event Handlers ***

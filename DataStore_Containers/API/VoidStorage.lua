@@ -35,7 +35,7 @@ end
 local function ScanVoidStorage()
 	ScanTab(1)
 	ScanTab(2)
-	DataStore:Broadcast("DATASTORE_VOIDSTORAGE_UPDATED")
+	AddonFactory:Broadcast("DATASTORE_VOIDSTORAGE_UPDATED")
 end
 
 -- *** Event Handlers ***

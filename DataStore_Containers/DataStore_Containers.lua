@@ -115,7 +115,7 @@ local function ScanContainer(bagID, bagSize)
 	end
 	
 	thisCharacter.lastUpdate = time()
-	DataStore:Broadcast("DATASTORE_CONTAINER_UPDATED", bagID, containerType)
+	AddonFactory:Broadcast("DATASTORE_CONTAINER_UPDATED", bagID, containerType)
 end
 
 local function ScanBagSlotsInfo()

@@ -76,7 +76,7 @@ local function ScanMainSlots()
 		
 	end
 
-	DataStore:Broadcast("DATASTORE_CONTAINER_UPDATED", bagID, 2)		-- 2 = container type: Player Bank
+	AddonFactory:Broadcast("DATASTORE_CONTAINER_UPDATED", bagID, 2)		-- 2 = container type: Player Bank
 end
 
 -- *** Event Handlers ***
