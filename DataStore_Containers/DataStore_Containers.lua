@@ -139,19 +139,20 @@ end
 local function ScanBankSlotsInfo()
 	local char = thisCharacter
 	
-	local numSlots = NUM_BANKGENERIC_SLOTS
+	local numSlots = NUM_BANKGENERIC_SLOTS or 98
 	-- local freeSlots = thisCharacterBank.freeslots
 	local freeSlots = C_Container.GetContainerNumFreeSlots(-1)
 
-	for bagID = COMMON_NUM_BAG_SLOTS + 1, COMMON_NUM_BAG_SLOTS + NUM_BANKBAGSLOTS do -- 6 to 12
+	for bagID = COMMON_NUM_BAG_SLOTS + 1, COMMON_NUM_BAG_SLOTS + (NUM_BANKBAGSLOTS or 7) do -- 6 to 12
 		local bag = GetContainer(bagID)
 		
 		numSlots = numSlots + bit64:GetBits(bag.info, 3, 6)		-- bits 3-8 : bag size
 		freeSlots = freeSlots + bit64:GetBits(bag.info, 9, 6)		-- bits 9-14 : number of free slots in this bag
 	end
 	
-	local numPurchasedSlots, isFull = GetNumBankSlots()
-	
+	--local numPurchasedSlots, isFull = GetNumBankSlots()
+	local numPurchasedSlots = C_Bank.FetchNumPurchasedBankTabs(Enum.BankType.Character)
+
 	char.bankInfo = numSlots										-- bits 0-9 : num bag slots
 				+ bit64:LeftShift(freeSlots, 10)					-- bits 10-19 : num free slots
 				+ bit64:LeftShift(numPurchasedSlots, 20)		-- bits 20+ : num purchased
@@ -220,7 +221,7 @@ end
 
 local function OnBankFrameOpened()
 	isBankOpen = true
-	for bagID = COMMON_NUM_BAG_SLOTS + 1, COMMON_NUM_BAG_SLOTS + NUM_BANKBAGSLOTS do -- 5 to 11 or 6 to 12 in retail
+	for bagID = COMMON_NUM_BAG_SLOTS + 1, COMMON_NUM_BAG_SLOTS + (NUM_BANKBAGSLOTS or 7) do -- 5 to 11 or 6 to 12 in retail
 		ScanBag(bagID)
 	end
 	
@@ -327,8 +328,8 @@ if isRetail then
 		[1024] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 6), -- "Mining Bag",
 	}
 	
-	bagIcons[REAGENTBANK_CONTAINER] = "Interface\\Icons\\inv_misc_bag_satchelofcenarius"
-	bagSizes[REAGENTBANK_CONTAINER] = 98
+	--bagIcons[REAGENTBANK_CONTAINER] = "Interface\\Icons\\inv_misc_bag_satchelofcenarius"
+	--bagSizes[REAGENTBANK_CONTAINER] = 98
 else
 	bagTypeStrings = {
 		[1] = "Quiver",
