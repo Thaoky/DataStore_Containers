@@ -7,6 +7,7 @@ This file keeps track of an account's warband bank (Retail only).
 local addonName, addon = ...
 local thisCharacter
 local warbank
+local isBankOpen = false
 
 local DataStore, tonumber, wipe, time, C_Container = DataStore, tonumber, wipe, time, C_Container
 
@@ -27,7 +28,7 @@ local TAB_SIZE = 98
 
 local function ScanAccountBankTab(tabID)
 	local tab = GetBankTab(tabID)
-	if not tab then return end
+	if not tab or not isBankOpen then return end
 
 	wipe(tab.items)				-- clean existing tab data
 	wipe(tab.links)
@@ -144,11 +145,13 @@ AddonFactory:OnPlayerLogin(function()
 	addon:ListenTo("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", function(event, interactionType)
 		-- .Banker when interacting with a banker in a capital
 		-- .AccountBanker when interacting with the remote portal
-		
 		if interactionType == Enum.PlayerInteractionType.Banker or interactionType == Enum.PlayerInteractionType.AccountBanker then 
+			isBankOpen = true
 			ScanAccountBank()
 		end
 	end)
+	addon:ListenTo("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", function() isBankOpen = false end)
+
 	
 	-- The event is triggered when purchasing a new tab, not sure yet if we need it.
 	addon:ListenTo("PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED", OnAccountBankTabsChanged)
