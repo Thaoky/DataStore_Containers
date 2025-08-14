@@ -501,6 +501,7 @@ end
 
 local function _GetItemCountByID(container, searchedID)
 	local count = 0
+	if not container then return count end
 	
 	for slotID, slot in pairs(container.items) do
 		local pos = _GetItemCountPosition(slot)
