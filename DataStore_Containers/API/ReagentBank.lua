@@ -91,7 +91,10 @@ AddonFactory:OnAddonLoaded(addonName, function()
 		characterTables = {
 			["DataStore_Containers_Reagents"] = {
 				GetReagentBank = function(character) return character end,
-				GetReagentBankItemCount = function(character, searchedID) return DataStore:GetItemCountByID(character, searchedID) end,
+				--GetReagentBankItemCount = function(character, searchedID) return DataStore:GetItemCountByID(character, searchedID) end,
+				GetReagentBankItemCount = function(character, searchedID)
+					return DataStore:GetItemCountByID(DataStore:GetReagentBank(character), searchedID)
+				end,
 			},
 		},
 	})
