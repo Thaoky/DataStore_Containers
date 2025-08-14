@@ -12,7 +12,7 @@ local DataStore, tonumber, wipe, time, C_Container = DataStore, tonumber, wipe, 
 local isRetail = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
 
 local bit64 = LibStub("LibBit64")
-local REAGENT_BANK = Enum.BagIndex.Reagentbank
+local REAGENT_BANK = Enum.BagIndex.Reagentbank or DataStore.Enum.ContainerIDs.ReagentBank
 
 local function GetRemainingCooldown(start)
    local uptime = GetTime()
@@ -58,7 +58,7 @@ end
 local function ScanReagentBank()
 	local bagID = REAGENT_BANK
 	if not bagID then return end
-	
+
 	local bag = thisCharacter
 	wipe(bag.items)
 	wipe(bag.links)
