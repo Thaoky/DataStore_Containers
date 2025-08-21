@@ -18,16 +18,21 @@ local DataStore, tonumber, wipe, type, time, C_Container = DataStore, tonumber, 
 local GetTime, GetInventoryItemTexture, GetInventoryItemLink, GetItemInfo = GetTime, GetInventoryItemTexture, GetInventoryItemLink, GetItemInfo
 local log = math.log
 local isRetail = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
+local hasKeyring = LE_EXPANSION_LEVEL_CURRENT < LE_EXPANSION_CATACLYSM
+local interfaceVersion = select(4, GetBuildInfo())
+local hasReagentBank = false -- depending on Classic updates: interfaceVersion >= 60200 and interfaceVersion < 110200
+local hasVoidBank = false -- depending on Classic updates: interfaceVersion >= 50300 and interfaceVersion < 110200
 
 local enum = DataStore.Enum.ContainerIDs
 local bit64 = LibStub("LibBit64")
 
 -- Constants usable for all versions
 local COMMON_NUM_BAG_SLOTS = isRetail and NUM_BAG_SLOTS + 1 or NUM_BAG_SLOTS
-local MIN_BANK_SLOT = isRetail and 6 or 5		-- Bags 6 - 12 are Bank as of 10.0
-local MAX_BANK_SLOT = isRetail and 12 or 11
-local MIN_WARBANK_TAB = 13
-
+local MIN_BANK_SLOT = Enum.BagIndex.CharacterBankTab_1 or 6  -- Bags 6 - 12 are Bank as of 10.0
+local MAX_BANK_SLOT = Enum.BagIndex.CharacterBankTab_6 or 12
+local MIN_ACCOUNTBANK_TAB = Enum.BagIndex.AccountBankTab_1 or 13
+local MAX_ACCOUNTBANK_TAB = Enum.BagIndex.AccountBankTab_5 or 17
+local NUM_BANKBAGSLOTS = NUM_BANKBAGSLOTS or ((MAX_BANK_SLOT - MIN_BANK_SLOT) + 1)
 
 -- *** Utility functions ***
 local function GetRemainingCooldown(start)
@@ -66,6 +71,12 @@ local function Log2(n)
 end
 
 -- *** Scanning functions ***
+local function EmptyContainer(bagID)
+	local bag = GetContainer(bagID)
+	wipe(bag.items)
+	wipe(bag.links)
+end
+
 local function ScanContainer(bagID, bagSize)
 	local bag = GetContainer(bagID)
 
@@ -152,7 +163,6 @@ local function ScanBankSlotsInfo()
 	
 	--local numPurchasedSlots, isFull = GetNumBankSlots()
 	local numPurchasedSlots = C_Bank.FetchNumPurchasedBankTabs(Enum.BankType.Character)
-
 	char.bankInfo = numSlots										-- bits 0-9 : num bag slots
 				+ bit64:LeftShift(freeSlots, 10)					-- bits 10-19 : num free slots
 				+ bit64:LeftShift(numPurchasedSlots, 20)		-- bits 20+ : num purchased
@@ -199,7 +209,7 @@ local function OnBagUpdate(event, bag)
 		return
 	end
 
-	if bag == enum.Keyring or (bag >= 0 and bag < MIN_WARBANK_TAB) then
+	if (bag == enum.Keyring and hasKeyring) or (bag >= 0 and bag < MIN_ACCOUNTBANK_TAB) then
 		ScanBag(bag)
 	end
 end
@@ -314,6 +324,17 @@ local bagSizes = {
 	[enum.ReagentBank] = 98,
 }
 
+-- This is kind of ugly, but should allow for backwards compatibility for Classic
+if interfaceVersion >= 110200 then
+	bagSizes[enum.MainBankSlots] = 98
+	for bagID = Enum.BagIndex.CharacterBankTab_1, Enum.BagIndex.AccountBankTab_5 do
+		bagSizes[bagID] = 98
+	end
+	bagSizes[enum.VoidStorageTab1] = nil
+	bagSizes[enum.VoidStorageTab2] = nil
+	bagSizes[enum.ReagentBank] = nil
+end
+
 if isRetail then
 	bagTypeStrings = {
 		-- [1] = "Quiver",
@@ -328,8 +349,9 @@ if isRetail then
 		[1024] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 6), -- "Mining Bag",
 	}
 	
-	--bagIcons[REAGENTBANK_CONTAINER] = "Interface\\Icons\\inv_misc_bag_satchelofcenarius"
-	--bagSizes[REAGENTBANK_CONTAINER] = 98
+	-- bagIcons[REAGENTBANK_CONTAINER] = "Interface\\Icons\\inv_misc_bag_satchelofcenarius"
+	-- bagSizes[REAGENTBANK_CONTAINER] = 98
+
 else
 	bagTypeStrings = {
 		[1] = "Quiver",
@@ -478,6 +500,7 @@ end
 
 local function _GetItemCountByID(container, searchedID)
 	local count = 0
+	if not container then return count end													
 	
 	for slotID, slot in pairs(container.items) do
 		local pos = _GetItemCountPosition(slot)
@@ -621,6 +644,13 @@ AddonFactory:OnPlayerLogin(function()
 	-- if not isRetail and HasKey() then
 		-- ScanBag(enum.Keyring)
 	-- end
+	
+	if not hasKeyring then EmptyContainer(enum.Keyring) end																  
+	if not hasReagentBank then EmptyContainer(enum.ReagentBank) end
+	if not hasVoidBank then
+		EmptyContainer(enum.VoidStorageTab1)
+		EmptyContainer(enum.VoidStorageTab2)
+	end
 	
 	addon:ListenTo("BANKFRAME_OPENED", OnBankFrameOpened, MAIN_TAG)
 	

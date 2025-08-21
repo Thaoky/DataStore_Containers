@@ -12,7 +12,7 @@ local DataStore, tonumber, wipe, time, C_Container = DataStore, tonumber, wipe, 
 local isRetail = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
 
 local bit64 = LibStub("LibBit64")
-local REAGENT_BANK = Enum.BagIndex.Reagentbank
+local REAGENT_BANK = Enum.BagIndex.Reagentbank or DataStore.Enum.ContainerIDs.ReagentBank
 
 local function GetRemainingCooldown(start)
    local uptime = GetTime()
@@ -91,7 +91,10 @@ AddonFactory:OnAddonLoaded(addonName, function()
 		characterTables = {
 			["DataStore_Containers_Reagents"] = {
 				GetReagentBank = function(character) return character end,
-				GetReagentBankItemCount = function(character, searchedID) return DataStore:GetItemCountByID(character, searchedID) end,
+				--GetReagentBankItemCount = function(character, searchedID) return DataStore:GetItemCountByID(character, searchedID) end,
+				GetReagentBankItemCount = function(character, searchedID)
+					return DataStore:GetItemCountByID(DataStore:GetReagentBank(character), searchedID)
+				end,
 			},
 		},
 	})
