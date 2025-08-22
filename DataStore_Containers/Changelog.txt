@@ -2,6 +2,11 @@ DataStore Changelog (dates in dd/mm/yyyy)
 ===================
 
 
+Version 2025.08.22 (22/08/2025)
+
+- MoP fixes for reagent bank & void storage.
+- Fixed ScanBankSlotsInfo() for MoP.
+
 Version 2025.08.21 (21/08/2025)
 
 - Updated ToC for Mists of Pandaria and 11.2.

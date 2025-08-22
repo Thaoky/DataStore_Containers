@@ -166,7 +166,10 @@ local function ScanBankSlotsInfo()
 	end
 	
 	--local numPurchasedSlots, isFull = GetNumBankSlots()
-	local numPurchasedSlots = C_Bank.FetchNumPurchasedBankTabs(Enum.BankType.Character)
+	local numPurchasedSlots = isRetail 
+		and C_Bank.FetchNumPurchasedBankTabs(Enum.BankType.Character)
+		or GetNumBankSlots()
+
 	char.bankInfo = numSlots										-- bits 0-9 : num bag slots
 				+ bit64:LeftShift(freeSlots, 10)					-- bits 10-19 : num free slots
 				+ bit64:LeftShift(numPurchasedSlots, 20)		-- bits 20+ : num purchased
