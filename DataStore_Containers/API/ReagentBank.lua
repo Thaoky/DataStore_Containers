@@ -107,7 +107,6 @@ AddonFactory:OnAddonLoaded(addonName, function()
 
 	-- 11.2 : Clear the reagent bank table for everyone
 	if interfaceVersion >= 110200 then
-		print("clear reagents")
 		DataStore_Containers_Reagents = {}
 	end
 
