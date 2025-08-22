@@ -20,8 +20,12 @@ local log = math.log
 local isRetail = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
 local hasKeyring = LE_EXPANSION_LEVEL_CURRENT < LE_EXPANSION_CATACLYSM
 local interfaceVersion = select(4, GetBuildInfo())
-local hasReagentBank = false -- depending on Classic updates: interfaceVersion >= 60200 and interfaceVersion < 110200
-local hasVoidBank = false -- depending on Classic updates: interfaceVersion >= 50300 and interfaceVersion < 110200
+
+-- depending on Classic updates: interfaceVersion >= 60200 and interfaceVersion < 110200
+local hasReagentBank = (interfaceVersion >= 60200 and interfaceVersion < 110200) 
+
+-- depending on Classic updates: interfaceVersion >= 50300 and interfaceVersion < 110200
+local hasVoidBank = (interfaceVersion >= 50300 and interfaceVersion < 110200) 
 
 local enum = DataStore.Enum.ContainerIDs
 local bit64 = LibStub("LibBit64")
@@ -318,22 +322,11 @@ local bagIcons = {
 }
 
 local bagSizes = {
-	[enum.VoidStorageTab1] = 80,
-	[enum.VoidStorageTab2] = 80,
-	[enum.MainBankSlots] = 28,
-	[enum.ReagentBank] = 98,
+	[enum.VoidStorageTab1] = hasVoidBank and 80,
+	[enum.VoidStorageTab2] = hasVoidBank and 80,
+	[enum.MainBankSlots] = hasVoidBank and 28 or 98,	-- 11.2: void storage removed, and main bank slots upgraded
+	[enum.ReagentBank] = hasReagentBank and 98,
 }
-
--- This is kind of ugly, but should allow for backwards compatibility for Classic
-if interfaceVersion >= 110200 then
-	bagSizes[enum.MainBankSlots] = 98
-	for bagID = Enum.BagIndex.CharacterBankTab_1, Enum.BagIndex.AccountBankTab_5 do
-		bagSizes[bagID] = 98
-	end
-	bagSizes[enum.VoidStorageTab1] = nil
-	bagSizes[enum.VoidStorageTab2] = nil
-	bagSizes[enum.ReagentBank] = nil
-end
 
 if isRetail then
 	bagTypeStrings = {
@@ -348,9 +341,11 @@ if isRetail then
 		[512] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 5), -- "Gem Bag",
 		[1024] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 6), -- "Mining Bag",
 	}
-	
-	-- bagIcons[REAGENTBANK_CONTAINER] = "Interface\\Icons\\inv_misc_bag_satchelofcenarius"
-	-- bagSizes[REAGENTBANK_CONTAINER] = 98
+
+	-- CharacterBankTab_x : 6 to 11, AccountBankTab_x : 12 to 16
+	for bagID = Enum.BagIndex.CharacterBankTab_1, Enum.BagIndex.AccountBankTab_5 do
+		bagSizes[bagID] = 98
+	end
 
 else
 	bagTypeStrings = {
@@ -646,11 +641,6 @@ AddonFactory:OnPlayerLogin(function()
 	-- end
 	
 	if not hasKeyring then EmptyContainer(enum.Keyring) end																  
-	if not hasReagentBank then EmptyContainer(enum.ReagentBank) end
-	if not hasVoidBank then
-		EmptyContainer(enum.VoidStorageTab1)
-		EmptyContainer(enum.VoidStorageTab2)
-	end
 	
 	addon:ListenTo("BANKFRAME_OPENED", OnBankFrameOpened, MAIN_TAG)
 	
