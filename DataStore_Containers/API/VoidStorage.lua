@@ -95,6 +95,14 @@ AddonFactory:OnAddonLoaded(addonName, function()
 	})
 	
 	thisCharacter = DataStore:GetCharacterDB("DataStore_Containers_VoidStorage", true)
+		
+	local interfaceVersion = select(4, GetBuildInfo())
+
+	-- 11.2 : Clear the void storage table for everyone
+	if interfaceVersion >= 110200 then
+		DataStore_Containers_VoidStorage = {}
+	end
+	
 end)
 
 AddonFactory:OnPlayerLogin(function()

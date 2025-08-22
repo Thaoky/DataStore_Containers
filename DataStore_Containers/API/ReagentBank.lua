@@ -102,6 +102,14 @@ AddonFactory:OnAddonLoaded(addonName, function()
 	thisCharacter = DataStore:GetCharacterDB("DataStore_Containers_Reagents", true)
 	thisCharacter.items = thisCharacter.items or {}
 	thisCharacter.links = thisCharacter.links or {}
+	
+	local interfaceVersion = select(4, GetBuildInfo())
+
+	-- 11.2 : Clear the reagent bank table for everyone
+	if interfaceVersion >= 110200 then
+		print("clear reagents")
+		DataStore_Containers_Reagents = {}
+	end
 
 	local db = DataStore:GetCharacterDB("DataStore_Containers_Characters")
 	thisCharacterCooldowns = db.Cooldowns
