@@ -1,4 +1,4 @@
-if WOW_PROJECT_ID < WOW_PROJECT_WRATH_CLASSIC then return end
+if LE_EXPANSION_LEVEL_CURRENT < LE_EXPANSION_WRATH_OF_THE_LICH_KING then return end
 
 --[[ 
 This file keeps track of a character's Void Storage (Retail + Wrath only)
