@@ -18,16 +18,25 @@ local DataStore, tonumber, wipe, type, time, C_Container = DataStore, tonumber, 
 local GetTime, GetInventoryItemTexture, GetInventoryItemLink, GetItemInfo = GetTime, GetInventoryItemTexture, GetInventoryItemLink, GetItemInfo
 local log = math.log
 local isRetail = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
+local hasKeyring = LE_EXPANSION_LEVEL_CURRENT < LE_EXPANSION_CATACLYSM
+local interfaceVersion = select(4, GetBuildInfo())
+
+-- depending on Classic updates: interfaceVersion >= 60200 and interfaceVersion < 110200
+local hasReagentBank = (interfaceVersion >= 60200 and interfaceVersion < 110200) 
+
+-- depending on Classic updates: interfaceVersion >= 50300 and interfaceVersion < 110200
+local hasVoidBank = (interfaceVersion >= 50300 and interfaceVersion < 110200) 
 
 local enum = DataStore.Enum.ContainerIDs
 local bit64 = LibStub("LibBit64")
 
 -- Constants usable for all versions
 local COMMON_NUM_BAG_SLOTS = isRetail and NUM_BAG_SLOTS + 1 or NUM_BAG_SLOTS
-local MIN_BANK_SLOT = isRetail and 6 or 5		-- Bags 6 - 12 are Bank as of 10.0
-local MAX_BANK_SLOT = isRetail and 12 or 11
-local MIN_WARBANK_TAB = 13
-
+local MIN_BANK_SLOT = Enum.BagIndex.CharacterBankTab_1 or 6  -- Bags 6 - 12 are Bank as of 10.0
+local MAX_BANK_SLOT = Enum.BagIndex.CharacterBankTab_6 or 12
+local MIN_ACCOUNTBANK_TAB = Enum.BagIndex.AccountBankTab_1 or 13
+local MAX_ACCOUNTBANK_TAB = Enum.BagIndex.AccountBankTab_5 or 17
+local NUM_BANKBAGSLOTS = NUM_BANKBAGSLOTS or ((MAX_BANK_SLOT - MIN_BANK_SLOT) + 1)
 
 -- *** Utility functions ***
 local function GetRemainingCooldown(start)
@@ -66,6 +75,12 @@ local function Log2(n)
 end
 
 -- *** Scanning functions ***
+local function EmptyContainer(bagID)
+	local bag = GetContainer(bagID)
+	wipe(bag.items)
+	wipe(bag.links)
+end
+
 local function ScanContainer(bagID, bagSize)
 	local bag = GetContainer(bagID)
 
@@ -139,19 +154,22 @@ end
 local function ScanBankSlotsInfo()
 	local char = thisCharacter
 	
-	local numSlots = NUM_BANKGENERIC_SLOTS
+	local numSlots = NUM_BANKGENERIC_SLOTS or 98
 	-- local freeSlots = thisCharacterBank.freeslots
 	local freeSlots = C_Container.GetContainerNumFreeSlots(-1)
 
-	for bagID = COMMON_NUM_BAG_SLOTS + 1, COMMON_NUM_BAG_SLOTS + NUM_BANKBAGSLOTS do -- 6 to 12
+	for bagID = COMMON_NUM_BAG_SLOTS + 1, COMMON_NUM_BAG_SLOTS + (NUM_BANKBAGSLOTS or 7) do -- 6 to 12
 		local bag = GetContainer(bagID)
 		
 		numSlots = numSlots + bit64:GetBits(bag.info, 3, 6)		-- bits 3-8 : bag size
 		freeSlots = freeSlots + bit64:GetBits(bag.info, 9, 6)		-- bits 9-14 : number of free slots in this bag
 	end
 	
-	local numPurchasedSlots, isFull = GetNumBankSlots()
-	
+	--local numPurchasedSlots, isFull = GetNumBankSlots()
+	local numPurchasedSlots = isRetail 
+		and C_Bank.FetchNumPurchasedBankTabs(Enum.BankType.Character)
+		or GetNumBankSlots()
+
 	char.bankInfo = numSlots										-- bits 0-9 : num bag slots
 				+ bit64:LeftShift(freeSlots, 10)					-- bits 10-19 : num free slots
 				+ bit64:LeftShift(numPurchasedSlots, 20)		-- bits 20+ : num purchased
@@ -198,7 +216,7 @@ local function OnBagUpdate(event, bag)
 		return
 	end
 
-	if bag == enum.Keyring or (bag >= 0 and bag < MIN_WARBANK_TAB) then
+	if (bag == enum.Keyring and hasKeyring) or (bag >= 0 and bag < MIN_ACCOUNTBANK_TAB) then
 		ScanBag(bag)
 	end
 end
@@ -220,7 +238,7 @@ end
 
 local function OnBankFrameOpened()
 	isBankOpen = true
-	for bagID = COMMON_NUM_BAG_SLOTS + 1, COMMON_NUM_BAG_SLOTS + NUM_BANKBAGSLOTS do -- 5 to 11 or 6 to 12 in retail
+	for bagID = COMMON_NUM_BAG_SLOTS + 1, COMMON_NUM_BAG_SLOTS + (NUM_BANKBAGSLOTS or 7) do -- 5 to 11 or 6 to 12 in retail
 		ScanBag(bagID)
 	end
 	
@@ -307,10 +325,10 @@ local bagIcons = {
 }
 
 local bagSizes = {
-	[enum.VoidStorageTab1] = 80,
-	[enum.VoidStorageTab2] = 80,
-	[enum.MainBankSlots] = 28,
-	[enum.ReagentBank] = 98,
+	[enum.VoidStorageTab1] = hasVoidBank and 80,
+	[enum.VoidStorageTab2] = hasVoidBank and 80,
+	[enum.MainBankSlots] = hasVoidBank and 28 or 98,	-- 11.2: void storage removed, and main bank slots upgraded
+	[enum.ReagentBank] = hasReagentBank and 98,
 }
 
 if isRetail then
@@ -326,9 +344,12 @@ if isRetail then
 		[512] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 5), -- "Gem Bag",
 		[1024] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 6), -- "Mining Bag",
 	}
-	
-	bagIcons[REAGENTBANK_CONTAINER] = "Interface\\Icons\\inv_misc_bag_satchelofcenarius"
-	bagSizes[REAGENTBANK_CONTAINER] = 98
+
+	-- CharacterBankTab_x : 6 to 11, AccountBankTab_x : 12 to 16
+	for bagID = Enum.BagIndex.CharacterBankTab_1, Enum.BagIndex.AccountBankTab_5 do
+		bagSizes[bagID] = 98
+	end
+
 else
 	bagTypeStrings = {
 		[1] = "Quiver",
@@ -477,6 +498,7 @@ end
 
 local function _GetItemCountByID(container, searchedID)
 	local count = 0
+	if not container then return count end													
 	
 	for slotID, slot in pairs(container.items) do
 		local pos = _GetItemCountPosition(slot)
@@ -620,6 +642,8 @@ AddonFactory:OnPlayerLogin(function()
 	-- if not isRetail and HasKey() then
 		-- ScanBag(enum.Keyring)
 	-- end
+	
+	if not hasKeyring then EmptyContainer(enum.Keyring) end																  
 	
 	addon:ListenTo("BANKFRAME_OPENED", OnBankFrameOpened, MAIN_TAG)
 	

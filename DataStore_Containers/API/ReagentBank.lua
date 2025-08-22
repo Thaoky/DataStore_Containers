@@ -1,4 +1,4 @@
-if WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE then return end
+if WOW_PROJECT_ID < WOW_PROJECT_WRATH_CLASSIC then return end
 
 --[[ 
 This file keeps track of a character's reagent bank (Retail + Wrath only)
@@ -12,7 +12,7 @@ local DataStore, tonumber, wipe, time, C_Container = DataStore, tonumber, wipe, 
 local isRetail = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
 
 local bit64 = LibStub("LibBit64")
-local REAGENT_BANK = Enum.BagIndex.Reagentbank
+local REAGENT_BANK = Enum.BagIndex.Reagentbank or DataStore.Enum.ContainerIDs.ReagentBank
 
 local function GetRemainingCooldown(start)
    local uptime = GetTime()
@@ -91,7 +91,10 @@ AddonFactory:OnAddonLoaded(addonName, function()
 		characterTables = {
 			["DataStore_Containers_Reagents"] = {
 				GetReagentBank = function(character) return character end,
-				GetReagentBankItemCount = function(character, searchedID) return DataStore:GetItemCountByID(character, searchedID) end,
+				--GetReagentBankItemCount = function(character, searchedID) return DataStore:GetItemCountByID(character, searchedID) end,
+				GetReagentBankItemCount = function(character, searchedID)
+					return DataStore:GetItemCountByID(DataStore:GetReagentBank(character), searchedID)
+				end,
 			},
 		},
 	})
@@ -99,6 +102,13 @@ AddonFactory:OnAddonLoaded(addonName, function()
 	thisCharacter = DataStore:GetCharacterDB("DataStore_Containers_Reagents", true)
 	thisCharacter.items = thisCharacter.items or {}
 	thisCharacter.links = thisCharacter.links or {}
+	
+	local interfaceVersion = select(4, GetBuildInfo())
+
+	-- 11.2 : Clear the reagent bank table for everyone
+	if interfaceVersion >= 110200 then
+		DataStore_Containers_Reagents = {}
+	end
 
 	local db = DataStore:GetCharacterDB("DataStore_Containers_Characters")
 	thisCharacterCooldowns = db.Cooldowns
