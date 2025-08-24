@@ -6,14 +6,24 @@ local addonName, addon = ...
 local thisCharacter
 local thisCharacterCooldowns
 
-local DataStore, tonumber, wipe, time, C_Container = DataStore, tonumber, wipe, time, C_Container
+local DataStore, tonumber, wipe, time, C_Container, C_Bank = DataStore, tonumber, wipe, time, C_Container, C_Bank
 local isRetail = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
+local interfaceVersion = select(4, GetBuildInfo())
+local isConsolidatedBank = (interfaceVersion >= 110200)		-- using the new 11.2 bank ?
 
 local enum = DataStore.Enum.ContainerIDs
 local bit64 = LibStub("LibBit64")
 
 local NUM_MAIN_SLOTS = 28
+local TAB_SIZE = 98
 local BANK_TAG = "Bank"
+
+local function GetBankTab(tabID)
+	-- Create the tab
+	thisCharacter[tabID] = thisCharacter[tabID] or {}
+
+	return thisCharacter[tabID]
+end
 
 local function GetRemainingCooldown(start)
    local uptime = GetTime()
@@ -79,6 +89,25 @@ local function ScanMainSlots()
 	AddonFactory:Broadcast("DATASTORE_CONTAINER_UPDATED", bagID, 2)		-- 2 = container type: Player Bank
 end
 
+local function ScanPlayerBankTabSettings(tabID, settings)
+	local tab = GetBankTab(tabID)
+	if tab then
+		tab.name = settings.name
+		tab.icon = settings.icon
+	end
+end
+
+local function ScanTabsInfo()
+	-- Only for new bank tabs since 11.2
+	local settings = C_Bank.FetchPurchasedBankTabData(Enum.BankType.Character)
+	
+	for index, tabID in pairs(C_Bank.FetchPurchasedBankTabIDs(Enum.BankType.Character)) do
+		ScanPlayerBankTabSettings(tabID, settings[index])
+	end
+	
+	thisCharacter.visited = true
+end
+
 -- *** Event Handlers ***
 local function OnBankFrameClosed()
 	addon:StopListeningTo("BANKFRAME_CLOSED", BANK_TAG)
@@ -92,10 +121,15 @@ local function OnPlayerBankSlotsChanged(event, slotID)
 end
 
 local function OnBankFrameOpened()
-	ScanMainSlots()
+	if isConsolidatedBank then
+		ScanTabsInfo()
+	else
+		ScanMainSlots()
+		
+		addon:ListenTo("PLAYERBANKSLOTS_CHANGED", OnPlayerBankSlotsChanged, BANK_TAG)
+	end
 
 	addon:ListenTo("BANKFRAME_CLOSED", OnBankFrameClosed, BANK_TAG)
-	addon:ListenTo("PLAYERBANKSLOTS_CHANGED", OnPlayerBankSlotsChanged, BANK_TAG)
 end
 
 -- ** Mixins **
@@ -135,23 +169,64 @@ local function _IteratePlayerBankSlots(character, callback)
 	end
 end
 
+local function _HasPlayerVisitedBank_Retail(character)
+	return character.visited
+end
+
+local function _HasPlayerVisitedBank_NonRetail(character)
+	return (type(character.freeslots) ~= "nil")
+end
+
+local function _GetPlayerBankTabName(character, tabID)
+	local tab = character[tabID]
+
+	return tab and tab.name or ""
+end
+
+local function _GetPlayerBankTabIcon(character, tabID)
+	local tab = character[tabID]
+	
+	return tab and tab.icon
+end
+
+local function _GetPlayerBankItemCount_Retail(character, searchedID)
+	return DataStore:GetItemCountByID(DataStore:GetPlayerBank(character), searchedID)
+end
+
+local function _GetPlayerBankItemCount_NonRetail(character, searchedID)
+	return DataStore:GetItemCountByID(character, searchedID)
+end
+
+
 AddonFactory:OnAddonLoaded(addonName, function() 
 	DataStore:RegisterTables({
 		addon = addon,
 		characterTables = {
 			["DataStore_Containers_Banks"] = {
 				GetPlayerBank = function(character) return character end,
-				GetPlayerBankItemCount = function(character, searchedID) return DataStore:GetItemCountByID(character, searchedID) end,
+				GetPlayerBankItemCount = isRetail and _GetPlayerBankItemCount_Retail or _GetPlayerBankItemCount_NonRetail,
+				
 				GetPlayerBankInfo = function(character) return NUM_MAIN_SLOTS, character.freeslots end,
-				HasPlayerVisitedBank = function(character) return (type(character.freeslots) ~= "nil") end,
+				GetPlayerBankTabName = isConsolidatedBank and _GetPlayerBankTabName,
+				GetPlayerBankTabIcon = isConsolidatedBank and _GetPlayerBankTabIcon,
+				HasPlayerVisitedBank = isConsolidatedBank and _HasPlayerVisitedBank_Retail or _HasPlayerVisitedBank_NonRetail,
 				IteratePlayerBankSlots = _IteratePlayerBankSlots,
 			},
 		},
 	})
 	
 	thisCharacter = DataStore:GetCharacterDB("DataStore_Containers_Banks", true)
-	thisCharacter.items = thisCharacter.items or {}
-	thisCharacter.links = thisCharacter.links or {}
+	
+	-- 11.2 : Clear the reagent bank table for everyone
+	if isConsolidatedBank then
+		-- Remove the old main bank slots info
+		thisCharacter.items = nil
+		thisCharacter.links = nil
+		thisCharacter.freeslots = nil
+	else
+		thisCharacter.items = thisCharacter.items or {}
+		thisCharacter.links = thisCharacter.links or {}
+	end
 
 	local db = DataStore:GetCharacterDB("DataStore_Containers_Characters")
 	thisCharacterCooldowns = db.Cooldowns

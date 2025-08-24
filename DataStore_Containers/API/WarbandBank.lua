@@ -8,7 +8,7 @@ local addonName, addon = ...
 local thisCharacter
 local warbank
 
-local DataStore, tonumber, wipe, time, C_Container = DataStore, tonumber, wipe, time, C_Container
+local DataStore, tonumber, wipe, time, C_Container, C_Bank = DataStore, tonumber, wipe, time, C_Container, C_Bank
 
 local bit64 = LibStub("LibBit64")
 
@@ -29,15 +29,22 @@ local function ScanAccountBankTab(tabID)
 	local tab = GetBankTab(tabID)
 	if not tab then return end
 
-	wipe(tab.items)				-- clean existing tab data
-	wipe(tab.links)
-	
 	local link, itemID
+	local isWipeDone = false
 
 	for slotID = 1, TAB_SIZE do
 		link = C_Container.GetContainerItemLink(tabID, slotID)
 		
 		if link then
+			
+			-- Wiping the tab has to be delayed until we get actual data, because the BAG_UPDATE event will be triggered
+			-- when using portals, etc.. and nil data will be returned, so we have to guard against it.
+			if not isWipeDone then
+				wipe(tab.items)				-- clean existing tab data
+				wipe(tab.links)
+				isWipeDone = true
+			end
+		
 			itemID = tonumber(link:match("item:(%d+)"))
 
 			if link:match("|Hkeystone:") then
