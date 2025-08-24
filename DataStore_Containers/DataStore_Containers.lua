@@ -20,6 +20,7 @@ local log = math.log
 local isRetail = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
 local hasKeyring = LE_EXPANSION_LEVEL_CURRENT < LE_EXPANSION_CATACLYSM
 local interfaceVersion = select(4, GetBuildInfo())
+local isConsolidatedBank = (interfaceVersion >= 110200)		-- using the new 11.2 bank ?
 
 -- depending on Classic updates: interfaceVersion >= 60200 and interfaceVersion < 110200
 local hasReagentBank = (interfaceVersion >= 60200 and interfaceVersion < 110200) 
@@ -77,8 +78,11 @@ end
 -- *** Scanning functions ***
 local function EmptyContainer(bagID)
 	local bag = GetContainer(bagID)
-	wipe(bag.items)
-	wipe(bag.links)
+	
+	if bag then
+		wipe(bag.items)
+		wipe(bag.links)
+	end
 end
 
 local function ScanContainer(bagID, bagSize)
@@ -143,8 +147,8 @@ local function ScanBagSlotsInfo()
 		local bag = GetContainer(bagID)
 		local info = bag.info or 0
 		
-		numSlots = numSlots + bit64:GetBits(info, 3, 6)		-- bits 3-8 : bag size
-		freeSlots = freeSlots + bit64:GetBits(info, 9, 6)		-- bits 9-14 : number of free slots in this bag
+		numSlots = numSlots + bit64:GetBits(info, 3, 7)		-- bits 3-9 : bag size
+		freeSlots = freeSlots + bit64:GetBits(info, 10, 7)		-- bits 10-16 : number of free slots in this bag
 	end
 	
 	char.bagInfo = numSlots								-- bits 0-9 : num bag slots
@@ -155,17 +159,21 @@ local function ScanBankSlotsInfo()
 	local char = thisCharacter
 	
 	local numSlots = NUM_BANKGENERIC_SLOTS or 98
-	-- local freeSlots = thisCharacterBank.freeslots
 	local freeSlots = C_Container.GetContainerNumFreeSlots(-1)
-
-	for bagID = COMMON_NUM_BAG_SLOTS + 1, COMMON_NUM_BAG_SLOTS + (NUM_BANKBAGSLOTS or 7) do -- 6 to 12
-		local bag = GetContainer(bagID)
-		
-		numSlots = numSlots + bit64:GetBits(bag.info, 3, 6)		-- bits 3-8 : bag size
-		freeSlots = freeSlots + bit64:GetBits(bag.info, 9, 6)		-- bits 9-14 : number of free slots in this bag
+	
+	if isConsolidatedBank then
+		numSlots = 0
+		freeSlots = 0
 	end
 	
-	--local numPurchasedSlots, isFull = GetNumBankSlots()
+	-- Retail : 6 to 11, MoP : 6 to 12
+	for bagID = COMMON_NUM_BAG_SLOTS + 1, COMMON_NUM_BAG_SLOTS + (NUM_BANKBAGSLOTS or 6) do -- 6 to 12
+		local bag = GetContainer(bagID)
+		
+		numSlots = numSlots + bit64:GetBits(bag.info, 3, 7)		-- bits 3-9 : bag size
+		freeSlots = freeSlots + bit64:GetBits(bag.info, 10, 7)		-- bits 10-16 : number of free slots in this bag
+	end
+
 	local numPurchasedSlots = isRetail 
 		and C_Bank.FetchNumPurchasedBankTabs(Enum.BankType.Character)
 		or GetNumBankSlots()
@@ -197,10 +205,10 @@ local function ScanBag(bagID)
 	end
 	
 	bag.info = (rarity or 0)						-- bits 0-2 : rarity
-		+ bit64:LeftShift(size, 3)					-- bits 3-8 : bag size
-		+ bit64:LeftShift(freeSlots, 9)			-- bits 9-14 : number of free slots in this bag
-		+ bit64:LeftShift(bagType or 0, 15)		-- bits 15-19 : 5 bits, 32 values (from 4 to 27 in 10.x) for the bag type
-		+ bit64:LeftShift(icon or 0, 20)			-- bits 20+ : icon id
+		+ bit64:LeftShift(size, 3)					-- bits 3-9 : bag size
+		+ bit64:LeftShift(freeSlots, 10)			-- bits 10-16 : number of free slots in this bag
+		+ bit64:LeftShift(bagType or 0, 17)		-- bits 17-21 : 5 bits, 32 values (from 4 to 27 in 10.x) for the bag type
+		+ bit64:LeftShift(icon or 0, 22)			-- bits 22+ : icon id
 	
 	ScanContainer(bagID, size)
 	ScanBagSlotsInfo()
@@ -238,7 +246,10 @@ end
 
 local function OnBankFrameOpened()
 	isBankOpen = true
-	for bagID = COMMON_NUM_BAG_SLOTS + 1, COMMON_NUM_BAG_SLOTS + (NUM_BANKBAGSLOTS or 7) do -- 5 to 11 or 6 to 12 in retail
+	
+	-- Retail : 6 to 11, MoP : 5 to 11
+	for bagID = COMMON_NUM_BAG_SLOTS + 1, COMMON_NUM_BAG_SLOTS + (NUM_BANKBAGSLOTS or 6) do -- 6 to 12
+	-- for bagID = MIN_BANK_SLOT, MAX_BANK_SLOT do
 		ScanBag(bagID)
 	end
 	
@@ -329,6 +340,7 @@ local bagSizes = {
 	[enum.VoidStorageTab2] = hasVoidBank and 80,
 	[enum.MainBankSlots] = hasVoidBank and 28 or 98,	-- 11.2: void storage removed, and main bank slots upgraded
 	[enum.ReagentBank] = hasReagentBank and 98,
+	[100] = 28, 	-- MainBankSlots for MoP
 }
 
 if isRetail then
@@ -346,9 +358,9 @@ if isRetail then
 	}
 
 	-- CharacterBankTab_x : 6 to 11, AccountBankTab_x : 12 to 16
-	for bagID = Enum.BagIndex.CharacterBankTab_1, Enum.BagIndex.AccountBankTab_5 do
-		bagSizes[bagID] = 98
-	end
+	-- for bagID = Enum.BagIndex.CharacterBankTab_1, Enum.BagIndex.AccountBankTab_5 do
+		-- bagSizes[bagID] = 98
+	-- end
 
 else
 	bagTypeStrings = {
@@ -371,9 +383,9 @@ local function _GetContainerInfo(character, containerID)
 	local link, size, free, bagType
 
 	if bag and bag.info then
-		size = bit64:GetBits(bag.info, 3, 6)		-- bits 3-8 : bag size
-		free = bit64:GetBits(bag.info, 9, 6)		-- bits 9-14 : number of free slots in this bag
-		bagType = bit64:GetBits(bag.info, 15, 5)	-- bits 15-19 : 5 bits, 32 values (from 4 to 27 in 10.x) for the bag type
+		size = bit64:GetBits(bag.info, 3, 7)		-- bits 3-8 : bag size
+		free = bit64:GetBits(bag.info, 10, 7)		-- bits 9-14 : number of free slots in this bag
+		bagType = bit64:GetBits(bag.info, 17, 5)	-- bits 15-19 : 5 bits, 32 values (from 4 to 27 in 10.x) for the bag type
 		link = bag.link
 	end
 	
@@ -391,7 +403,7 @@ local function _GetContainerIcon(character, containerID)
 	if bagIcons[containerID] then return bagIcons[containerID] end
 	
 	local bag = _GetContainer(character, containerID)
-	return bit64:RightShift(bag.info, 20)		-- bits 20+ : icon id
+	return bit64:RightShift(bag.info, 22)		-- bits 22+ : icon id
 end
 
 local function _GetContainerSize(character, containerID)
@@ -401,7 +413,7 @@ local function _GetContainerSize(character, containerID)
 	local bag = _GetContainer(character, containerID)
 	
 	return (bag and bag.info)
-		and bit64:GetBits(bag.info, 3, 6)		-- bits 3-8 : bag size
+		and bit64:GetBits(bag.info, 3, 7)		-- bits 3-8 : bag size
 		or 0
 end
 
@@ -643,7 +655,13 @@ AddonFactory:OnPlayerLogin(function()
 		-- ScanBag(enum.Keyring)
 	-- end
 	
-	if not hasKeyring then EmptyContainer(enum.Keyring) end																  
+	if not hasKeyring then EmptyContainer(enum.Keyring) end		
+
+	-- 11.2 : Clear the old bag 12 (previously the 7th bank bag)
+	if interfaceVersion >= 110200 then
+		local char = thisCharacter
+		char.Containers[12] = nil
+	end
 	
 	addon:ListenTo("BANKFRAME_OPENED", OnBankFrameOpened, MAIN_TAG)
 	

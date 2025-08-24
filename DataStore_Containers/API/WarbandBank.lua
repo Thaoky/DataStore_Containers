@@ -8,7 +8,7 @@ local addonName, addon = ...
 local thisCharacter
 local warbank
 
-local DataStore, tonumber, wipe, time, C_Container = DataStore, tonumber, wipe, time, C_Container
+local DataStore, tonumber, wipe, time, C_Container, C_Bank = DataStore, tonumber, wipe, time, C_Container, C_Bank
 
 local bit64 = LibStub("LibBit64")
 
