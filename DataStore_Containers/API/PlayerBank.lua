@@ -91,7 +91,7 @@ end
 
 local function ScanPlayerBankTabSettings(tabID, settings)
 	local tab = GetBankTab(tabID)
-	if tab then
+	if tab and settings then
 		tab.name = settings.name
 		tab.icon = settings.icon
 	end
@@ -138,14 +138,16 @@ local function _GetSlotInfo(bag, slotID)
 	-- This function is repeated in the main file, here, and in Guild bank.. find some time to clean this.
 	if not bag then return end
 
-	local link = bag.links[slotID]
+	-- local link = bag.links[slotID]
+	local link = bag.links and bag.links[slotID]
 	local isBattlePet
 	
 	if link then
 		isBattlePet = link:match("|Hbattlepet:")
 	end
 	
-	local slot = bag.items[slotID]
+	-- local slot = bag.items[slotID]
+	local slot = bag.items and bag.items[slotID]
 	local itemID, count
 	
 	if slot then
