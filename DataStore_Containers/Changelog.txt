@@ -2,6 +2,10 @@ DataStore Changelog (dates in dd/mm/yyyy)
 ===================
 
 
+Version 2025.09.22 (22/09/2025)
+
+- Added IterateWarbandBank().
+
 Version 2025.09.01 (01/09/2025)
 
 - Fixed a lua error when searching bags.
