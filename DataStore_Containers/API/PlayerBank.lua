@@ -14,7 +14,8 @@ local isConsolidatedBank = (interfaceVersion >= 110200)		-- using the new 11.2 b
 local enum = DataStore.Enum.ContainerIDs
 local bit64 = LibStub("LibBit64")
 
-local NUM_MAIN_SLOTS = 28
+-- 24 on Classic Era, 28 from TBC onwards, until the 11.2 consolidated bank replaced it with tabs
+local NUM_MAIN_SLOTS = NUM_BANKGENERIC_SLOTS or 28
 local TAB_SIZE = 98
 local BANK_TAG = "Bank"
 
@@ -46,7 +47,10 @@ local function ScanMainSlots()
 	local startTime, duration, isEnabled
 
 	bag.freeslots = C_Container.GetContainerNumFreeSlots(enum.MainBankSlots)
-	
+
+	-- save the size, an alt scanned on another version of the game does not have the same bank
+	bag.numSlots = NUM_MAIN_SLOTS
+
 	for slotID = 1, NUM_MAIN_SLOTS do
 		link = C_Container.GetContainerItemLink(enum.MainBankSlots, slotID)
 		
@@ -160,8 +164,12 @@ local function _GetSlotInfo(bag, slotID)
 	return itemID, link, count, isBattlePet
 end
 
+local function _GetPlayerBankSize(character)
+	return character.numSlots or NUM_MAIN_SLOTS
+end
+
 local function _IteratePlayerBankSlots(character, callback)
-	for slotID = 1, NUM_MAIN_SLOTS do
+	for slotID = 1, _GetPlayerBankSize(character) do
 		local itemID, itemLink, itemCount, isBattlePet = _GetSlotInfo(character, slotID)
 		
 		-- Callback only if there is an item in that slot
@@ -208,7 +216,8 @@ AddonFactory:OnAddonLoaded(addonName, function()
 				GetPlayerBank = function(character) return character end,
 				GetPlayerBankItemCount = isRetail and _GetPlayerBankItemCount_Retail or _GetPlayerBankItemCount_NonRetail,
 				
-				GetPlayerBankInfo = function(character) return NUM_MAIN_SLOTS, character.freeslots end,
+				GetPlayerBankInfo = function(character) return _GetPlayerBankSize(character), character.freeslots end,
+				GetPlayerBankSize = _GetPlayerBankSize,
 				GetPlayerBankTabName = isConsolidatedBank and _GetPlayerBankTabName,
 				GetPlayerBankTabIcon = isConsolidatedBank and _GetPlayerBankTabIcon,
 				HasPlayerVisitedBank = isConsolidatedBank and _HasPlayerVisitedBank_Retail or _HasPlayerVisitedBank_NonRetail,

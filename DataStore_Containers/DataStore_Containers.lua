@@ -338,7 +338,8 @@ local bagIcons = {
 local bagSizes = {
 	[enum.VoidStorageTab1] = hasVoidBank and 80,
 	[enum.VoidStorageTab2] = hasVoidBank and 80,
-	[enum.MainBankSlots] = hasVoidBank and 28 or 98,	-- 11.2: void storage removed, and main bank slots upgraded
+	-- 24 on Classic Era, 28 from TBC onwards. 11.2 replaced the main slots with 98-slot tabs, see below.
+	[enum.MainBankSlots] = NUM_BANKGENERIC_SLOTS or 28,
 	[enum.ReagentBank] = hasReagentBank and 98,
 	[100] = 28, 	-- MainBankSlots for MoP
 }
