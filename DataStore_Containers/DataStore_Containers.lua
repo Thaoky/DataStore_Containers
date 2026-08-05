@@ -75,6 +75,10 @@ local function Log2(n)
    return log(n) / log(2)
 end
 
+-- Bag types are saved as Log2(item family) + this offset, so that they occupy 16 to 26 in the
+-- 5 bits (0 to 31) reserved for them. See ScanBag for why the range starts there.
+local BAG_TYPE_OFFSET = 16
+
 -- *** Scanning functions ***
 local function EmptyContainer(bagID)
 	local bag = GetContainer(bagID)
@@ -199,9 +203,15 @@ local function ScanBag(bagID)
 	-- https://wowpedia.fandom.com/wiki/ItemFamily
 	-- bag type will be 1024 for a mining bag for instance, it's just bit 11 in the item family (2^bit-1)
 	-- we'll just save 10 using the Log2
-	
+	-- .. shifted by BAG_TYPE_OFFSET, for two reasons:
+	--		- 0 must keep meaning "no specific type", but a quiver (family 1) would also save a 0
+	--		- earlier versions saved the plain Log2 (0 to 10) while bagTypeStrings was keyed on the
+	--		  item family itself, so those keys never matched. Staying clear of that range means
+	--		  data saved by an earlier version reads as "no type" (what it already displayed)
+	--		  instead of picking up a wrong label, until that character is scanned again.
+
 	if bagType and bagType > 0 then
-		bagType = Log2(bagType)
+		bagType = Log2(bagType) + BAG_TYPE_OFFSET
 	end
 	
 	bag.info = (rarity or 0)						-- bits 0-2 : rarity
@@ -354,17 +364,18 @@ if interfaceVersion >= 110200 then
 end
 
 if isRetail then
+	-- keys are what ScanBag saves : the bit index of the item family, offset by BAG_TYPE_OFFSET
 	bagTypeStrings = {
-		-- [1] = "Quiver",
-		-- [2] = "Ammo Pouch",
-		[4] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 1), -- "Soul Bag",
-		[8] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 7), -- "Leatherworking Bag",
-		[16] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 8), -- "Inscription Bag",
-		[32] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 2), -- "Herb Bag"
-		[64] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 3), -- "Enchanting Bag",
-		[128] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 4), -- "Engineering Bag",
-		[512] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 5), -- "Gem Bag",
-		[1024] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 6), -- "Mining Bag",
+		-- [BAG_TYPE_OFFSET + 0] = "Quiver",		-- family 1
+		-- [BAG_TYPE_OFFSET + 1] = "Ammo Pouch",	-- family 2
+		[BAG_TYPE_OFFSET + 2] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 1), -- "Soul Bag",				family 4
+		[BAG_TYPE_OFFSET + 3] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 7), -- "Leatherworking Bag",	family 8
+		[BAG_TYPE_OFFSET + 4] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 8), -- "Inscription Bag",		family 16
+		[BAG_TYPE_OFFSET + 5] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 2), -- "Herb Bag"				family 32
+		[BAG_TYPE_OFFSET + 6] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 3), -- "Enchanting Bag",		family 64
+		[BAG_TYPE_OFFSET + 7] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 4), -- "Engineering Bag",		family 128
+		[BAG_TYPE_OFFSET + 9] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 5), -- "Gem Bag",				family 512
+		[BAG_TYPE_OFFSET + 10] = C_Item.GetItemSubClassInfo(Enum.ItemClass.Container, 6), -- "Mining Bag",			family 1024
 	}
 
 	-- CharacterBankTab_x : 6 to 11, AccountBankTab_x : 12 to 16
@@ -373,17 +384,18 @@ if isRetail then
 	-- end
 
 else
+	-- keys are what ScanBag saves : the bit index of the item family, offset by BAG_TYPE_OFFSET
 	bagTypeStrings = {
-		[1] = "Quiver",
-		[2] = "Ammo Pouch",
-		[4] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER or Enum.ItemClass.Container, 1), -- "Soul Bag",
-		[8] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER or Enum.ItemClass.Container, 7), -- "Leatherworking Bag",
-		[16] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER or Enum.ItemClass.Container, 8), -- "Inscription Bag",
-		[32] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER or Enum.ItemClass.Container, 2), -- "Herb Bag"
-		[64] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER or Enum.ItemClass.Container, 3), -- "Enchanting Bag",
-		[128] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER or Enum.ItemClass.Container, 4), -- "Engineering Bag",
-		[512] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER or Enum.ItemClass.Container, 5), -- "Gem Bag",
-		[1024] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER or Enum.ItemClass.Container, 6), -- "Mining Bag",
+		[BAG_TYPE_OFFSET + 0] = "Quiver",																			--	family 1
+		[BAG_TYPE_OFFSET + 1] = "Ammo Pouch",																		--	family 2
+		[BAG_TYPE_OFFSET + 2] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER or Enum.ItemClass.Container, 1), -- "Soul Bag",				family 4
+		[BAG_TYPE_OFFSET + 3] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER or Enum.ItemClass.Container, 7), -- "Leatherworking Bag",	family 8
+		[BAG_TYPE_OFFSET + 4] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER or Enum.ItemClass.Container, 8), -- "Inscription Bag",		family 16
+		[BAG_TYPE_OFFSET + 5] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER or Enum.ItemClass.Container, 2), -- "Herb Bag"				family 32
+		[BAG_TYPE_OFFSET + 6] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER or Enum.ItemClass.Container, 3), -- "Enchanting Bag",		family 64
+		[BAG_TYPE_OFFSET + 7] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER or Enum.ItemClass.Container, 4), -- "Engineering Bag",		family 128
+		[BAG_TYPE_OFFSET + 9] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER or Enum.ItemClass.Container, 5), -- "Gem Bag",				family 512
+		[BAG_TYPE_OFFSET + 10] = C_Item.GetItemSubClassInfo(LE_ITEM_CLASS_CONTAINER or Enum.ItemClass.Container, 6), -- "Mining Bag",			family 1024
 	}
 end
 
