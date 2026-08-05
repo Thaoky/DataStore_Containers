@@ -150,9 +150,16 @@ local function ScanBagSlotsInfo()
 	for bagID = 0, COMMON_NUM_BAG_SLOTS, 1 do -- 5 Slots to include Reagent Bag
 		local bag = GetContainer(bagID)
 		local info = bag.info or 0
-		
-		numSlots = numSlots + bit64:GetBits(info, 3, 7)		-- bits 3-9 : bag size
-		freeSlots = freeSlots + bit64:GetBits(info, 10, 7)		-- bits 10-16 : number of free slots in this bag
+
+		-- A profession bag only takes what it was made for, so counting its slots here said a
+		-- character could carry more than they can : a hunter with a full quiver read as having
+		-- sixteen slots of room, a warlock's soul pouch added twenty. The bag type is saved
+		-- now, so the two kinds can be told apart. Each bag is still listed with its size and
+		-- its type in the tooltip, only these totals change.
+		if bit64:GetBits(info, 17, 5) == 0 then
+			numSlots = numSlots + bit64:GetBits(info, 3, 7)		-- bits 3-9 : bag size
+			freeSlots = freeSlots + bit64:GetBits(info, 10, 7)		-- bits 10-16 : number of free slots in this bag
+		end
 	end
 	
 	char.bagInfo = numSlots								-- bits 0-9 : num bag slots
@@ -173,9 +180,13 @@ local function ScanBankSlotsInfo()
 	-- Retail : 6 to 11, MoP : 6 to 12
 	for bagID = COMMON_NUM_BAG_SLOTS + 1, COMMON_NUM_BAG_SLOTS + (NUM_BANKBAGSLOTS or 6) do -- 6 to 12
 		local bag = GetContainer(bagID)
-		
-		numSlots = numSlots + bit64:GetBits(bag.info, 3, 7)		-- bits 3-9 : bag size
-		freeSlots = freeSlots + bit64:GetBits(bag.info, 10, 7)		-- bits 10-16 : number of free slots in this bag
+		local info = bag.info or 0		-- a bank bag slot that was never filled has none
+
+		-- same as the bags : a herb bag in the bank is not room for anything else
+		if bit64:GetBits(info, 17, 5) == 0 then
+			numSlots = numSlots + bit64:GetBits(info, 3, 7)		-- bits 3-9 : bag size
+			freeSlots = freeSlots + bit64:GetBits(info, 10, 7)		-- bits 10-16 : number of free slots in this bag
+		end
 	end
 
 	local numPurchasedSlots = isRetail 
