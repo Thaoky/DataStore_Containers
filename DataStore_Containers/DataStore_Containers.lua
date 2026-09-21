@@ -181,6 +181,18 @@ local function ScanBankSlotsInfo()
 	char.bankInfo = numSlots										-- bits 0-9 : num bag slots
 				+ bit64:LeftShift(freeSlots, 10)					-- bits 10-19 : num free slots
 				+ bit64:LeftShift(numPurchasedSlots, 20)		-- bits 20+ : num purchased
+
+	-- Fix #105: Scan warband/account bank info and money
+	if isRetail and C_Bank and C_Bank.FetchDepositedMoney then
+		local success, accountMoney = pcall(C_Bank.FetchDepositedMoney, Enum.BankType.Account)
+		if success and accountMoney then
+			char.accountBankMoney = accountMoney
+		end
+		local success2, numAccountTabs = pcall(C_Bank.FetchNumPurchasedBankTabs, Enum.BankType.Account)
+		if success2 and numAccountTabs then
+			char.accountBankTabs = numAccountTabs
+		end
+	end
 end
 
 local function ScanBag(bagID)
@@ -220,12 +232,21 @@ local MAIN_TAG = "Main"
 
 local function OnBagUpdate(event, bag)
 	-- if we get an update for a bank bag but the bank is not open, exit
-	if (bag >= MIN_BANK_SLOT) and (bag <= MAX_BANK_SLOT) and not isBankOpen then
-		return
+	-- Fix #105: Also handle warband/account bank tabs (13-17)
+	if ((bag >= MIN_BANK_SLOT) and (bag <= MAX_BANK_SLOT)) or ((bag >= MIN_ACCOUNTBANK_TAB) and (bag <= MAX_ACCOUNTBANK_TAB)) then
+		if not isBankOpen then return end
 	end
 
-	if (bag == enum.Keyring and hasKeyring) or (bag >= 0 and bag < MIN_ACCOUNTBANK_TAB) then
-		ScanBag(bag)
+	if (bag == enum.Keyring and hasKeyring) or (bag >= 0 and bag < 100) then
+		-- Fix: Allow account bank tabs (13-17) when bank open, previously blocked by < MIN_ACCOUNTBANK_TAB
+		if bag >= MIN_ACCOUNTBANK_TAB and bag <= MAX_ACCOUNTBANK_TAB then
+			if not isBankOpen then return end
+		end
+		if bag >=0 and bag <= MAX_ACCOUNTBANK_TAB then
+			ScanBag(bag)
+		elseif bag == enum.Keyring or bag == enum.MainBankSlots or bag == enum.ReagentBank then
+			ScanBag(bag)
+		end
 	end
 end
 
@@ -251,6 +272,15 @@ local function OnBankFrameOpened()
 	for bagID = COMMON_NUM_BAG_SLOTS + 1, COMMON_NUM_BAG_SLOTS + (NUM_BANKBAGSLOTS or 6) do -- 6 to 12
 	-- for bagID = MIN_BANK_SLOT, MAX_BANK_SLOT do
 		ScanBag(bagID)
+	end
+
+	-- Fix #105: Scan warband/account bank tabs (13-17)
+	if MIN_ACCOUNTBANK_TAB and MAX_ACCOUNTBANK_TAB then
+		for bagID = MIN_ACCOUNTBANK_TAB, MAX_ACCOUNTBANK_TAB do
+			if C_Container.GetContainerNumSlots(bagID) and C_Container.GetContainerNumSlots(bagID) > 0 then
+				pcall(ScanBag, bagID)
+			end
+		end
 	end
 	
 	ScanBankSlotsInfo()
@@ -621,6 +651,8 @@ AddonFactory:OnAddonLoaded(addonName, function()
 				GetNumFreeBagSlots = _GetNumFreeBagSlots,
 				GetNumBankSlots = _GetNumBankSlots,
 				GetNumFreeBankSlots = _GetNumFreeBankSlots,
+				GetAccountBankMoney = _GetAccountBankMoney,
+				GetNumAccountBankTabs = _GetNumAccountBankTabs,
 				
 				-- retail
 				GetReagentBagItemCount = isRetail and _GetReagentBagItemCount,
