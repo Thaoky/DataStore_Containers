@@ -15,7 +15,7 @@ local thisCharacter
 local thisCharacterBank
 
 local DataStore, tonumber, wipe, type, time, C_Container = DataStore, tonumber, wipe, type, time, C_Container
-local GetTime, GetInventoryItemTexture, GetInventoryItemLink, GetItemInfo = GetTime, GetInventoryItemTexture, GetInventoryItemLink, GetItemInfo
+local GetTime, GetInventoryItemTexture, GetInventoryItemLink, C_Item = GetTime, GetInventoryItemTexture, GetInventoryItemLink, C_Item
 local log = math.log
 local isRetail = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
 local hasKeyring = LE_EXPANSION_LEVEL_CURRENT < LE_EXPANSION_CATACLYSM
@@ -190,7 +190,7 @@ local function ScanBag(bagID)
 	local icon = bagID > 0 and GetInventoryItemTexture("player", C_Container.ContainerIDToInventoryID(bagID))
 	bag.link = bagID > 0 and GetInventoryItemLink("player", C_Container.ContainerIDToInventoryID(bagID))
 	
-	local rarity = bag.link and select(3, GetItemInfo(bag.link))
+	local rarity = bag.link and select(3, C_Item.GetItemInfo(bag.link))
 	local size = C_Container.GetContainerNumSlots(bagID)
 	
 	-- https://wowpedia.fandom.com/wiki/API_GetContainerNumFreeSlots
@@ -449,7 +449,7 @@ local function _GetColoredContainerSize(character, containerID)
 
 	-- attempt to recover from a bad scan..
 	if rarity == 0 and bag then
-		rarity = bag.link and select(3, GetItemInfo(bag.link))
+		rarity = bag.link and select(3, C_Item.GetItemInfo(bag.link))
 	end
 
 	local color = rarity and rarityColors[rarity] or "|cFFFFFFFF"
