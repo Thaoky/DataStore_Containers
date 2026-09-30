@@ -9,7 +9,7 @@ local guilds
 local DataStore, TableInsert, TableConcat, format, strsplit = DataStore, table.insert, table.concat, format, strsplit
 local pairs, wipe, tonumber, type, time, date = pairs, wipe, tonumber, type, time, date
 local GetGuildInfo, GetGuildBankItemLink, GetGuildBankItemInfo, GetGuildBankTabInfo, GetGameTime, GetLocale = GetGuildInfo, GetGuildBankItemLink, GetGuildBankItemInfo, GetGuildBankTabInfo, GetGameTime, GetLocale
-local GetGuildBankMoney, UnitFactionGroup, UnitName = GetGuildBankMoney, UnitFactionGroup, UnitName
+local GetGuildBankMoney, UnitFactionGroup = GetGuildBankMoney, UnitFactionGroup
 local C_Container = C_Container
 
 local bit64 = LibStub("LibBit64")
@@ -329,7 +329,7 @@ end
 
 local commCallbacks = {
 	[MSG_SEND_BANK_TIMESTAMPS] = function(sender, timestamps)
-			if sender ~= UnitName("player") then						-- don't send back to self
+			if sender ~= AddonFactory:GetPlayerName() then						-- don't send back to self
 				local timestamps = GetBankTimestamps()
 				if timestamps then
 					DataStore:GuildWhisper(commPrefix, sender, MSG_BANK_TIMESTAMPS_REPLY, timestamps)		-- reply by sending my own data..
