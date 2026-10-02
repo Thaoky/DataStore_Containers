@@ -9,7 +9,7 @@ local thisCharacter
 local thisCharacterCooldowns
 
 local DataStore, tonumber, wipe, time, C_Container = DataStore, tonumber, wipe, time, C_Container
-local isRetail = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
+local isRetail = AddonFactory.isRetail
 
 local bit64 = LibStub("LibBit64")
 local REAGENT_BANK = Enum.BagIndex.Reagentbank or DataStore.Enum.ContainerIDs.ReagentBank
@@ -102,11 +102,9 @@ AddonFactory:OnAddonLoaded(addonName, function()
 	thisCharacter = DataStore:GetCharacterDB("DataStore_Containers_Reagents", true)
 	thisCharacter.items = thisCharacter.items or {}
 	thisCharacter.links = thisCharacter.links or {}
-	
-	local interfaceVersion = select(4, GetBuildInfo())
 
 	-- 11.2 : Clear the reagent bank table for everyone
-	if interfaceVersion >= 110200 then
+	if AddonFactory.buildVersion >= 110200 then
 		DataStore_Containers_Reagents = {}
 	end
 

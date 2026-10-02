@@ -1,4 +1,4 @@
-if WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE then return end
+if not AddonFactory.isMainline then return end
 
 --[[ 
 This file keeps track of an account's warband bank (Retail only).

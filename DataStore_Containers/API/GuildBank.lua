@@ -417,7 +417,7 @@ AddonFactory:OnPlayerLogin(function()
 		end
 	end)
 	
-	if WOW_PROJECT_ID == WOW_PROJECT_CATACLYSM_CLASSIC then
+	if AddonFactory.isCata then
 		addon:ListenTo("GUILDBANKFRAME_OPENED", OnGuildBankFrameOpened)
 	end
 end)
