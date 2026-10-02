@@ -19,6 +19,7 @@ local GetTime, GetInventoryItemTexture, GetInventoryItemLink, C_Item = GetTime, 
 local log = math.log
 
 local isRetail = AddonFactory.isRetail
+local isMainline = AddonFactory.isMainline
 local hasKeyring = LE_EXPANSION_LEVEL_CURRENT < LE_EXPANSION_CATACLYSM
 local interfaceVersion = AddonFactory.buildVersion
 local isConsolidatedBank = (interfaceVersion >= 110200)		-- using the new 11.2 bank ?
@@ -33,7 +34,7 @@ local enum = DataStore.Enum.ContainerIDs
 local bit64 = LibStub("LibBit64")
 
 -- Constants usable for all versions
-local COMMON_NUM_BAG_SLOTS = isRetail and NUM_BAG_SLOTS + 1 or NUM_BAG_SLOTS
+local COMMON_NUM_BAG_SLOTS = isMainline and NUM_BAG_SLOTS + 1 or NUM_BAG_SLOTS
 local MIN_BANK_SLOT = Enum.BagIndex.CharacterBankTab_1 or 6  -- Bags 6 - 12 are Bank as of 10.0
 local MAX_BANK_SLOT = Enum.BagIndex.CharacterBankTab_6 or 12
 local MIN_ACCOUNTBANK_TAB = Enum.BagIndex.AccountBankTab_1 or 13
@@ -124,7 +125,7 @@ local function ScanContainer(bagID, bagSize)
 		startTime, duration, isEnabled = C_Container.GetContainerItemCooldown(bagID, slotID)
 		
 		if startTime and startTime > 0 then
-			if not isRetail then
+			if not isMainline then
 				startTime = time() + GetRemainingCooldown(startTime)
 			end
 
@@ -175,7 +176,7 @@ local function ScanBankSlotsInfo()
 		freeSlots = freeSlots + bit64:GetBits(bag.info, 10, 7)		-- bits 10-16 : number of free slots in this bag
 	end
 
-	local numPurchasedSlots = isRetail 
+	local numPurchasedSlots = isMainline 
 		and C_Bank.FetchNumPurchasedBankTabs(Enum.BankType.Character)
 		or GetNumBankSlots()
 
@@ -354,7 +355,7 @@ if interfaceVersion >= 110200 then
 	bagSizes[enum.ReagentBank] = nil
 end
 
-if isRetail then
+if isMainline then
 	bagTypeStrings = {
 		-- [1] = "Quiver",
 		-- [2] = "Ammo Pouch",
@@ -547,7 +548,7 @@ local function _GetContainerItemCount(character, searchedID)
 		
 		if containerID <= 4 then
 			bagCount = bagCount + count
-		elseif containerID == 5 and isRetail then
+		elseif containerID == 5 and isMainline then
 			reagentBagCount = reagentBagCount + count
 		else
 			bankCount = bankCount + count
@@ -624,13 +625,13 @@ AddonFactory:OnAddonLoaded(addonName, function()
 				GetNumFreeBankSlots = _GetNumFreeBankSlots,
 				
 				-- retail
-				GetReagentBagItemCount = isRetail and _GetReagentBagItemCount,
-				GetNumPurchasedBankSlots = isRetail and _GetNumPurchasedBankSlots,
+				GetReagentBagItemCount = isMainline and _GetReagentBagItemCount,
+				GetNumPurchasedBankSlots = isMainline and _GetNumPurchasedBankSlots,
 				IterateContainerSlots = _IterateContainerSlots,
 				
 				-- non-retail
-				IterateBags = not isRetail and _IterateBags,
-				SearchBagsForItem = not isRetail and _SearchBagsForItem,
+				IterateBags = not isMainline and _IterateBags,
+				SearchBagsForItem = not isMainline and _SearchBagsForItem,
 			},
 			["DataStore_Containers_Banks"] = {
 			}
