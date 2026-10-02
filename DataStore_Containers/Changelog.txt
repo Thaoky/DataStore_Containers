@@ -7,6 +7,7 @@ Version 2026.10.02 (02/10/2026)
 - Moved build information to AddonFactory to centralize version detection.
 - Updated UI version detection to support WoW Forever.
 - Updated for Altoholic Forever v1.60.002.
+- Fixed a lua error when visiting the bank.
 
 Version 2026.09.30 (30/09/2026)
 
