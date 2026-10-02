@@ -17,9 +17,10 @@ local thisCharacterBank
 local DataStore, tonumber, wipe, type, time, C_Container = DataStore, tonumber, wipe, type, time, C_Container
 local GetTime, GetInventoryItemTexture, GetInventoryItemLink, C_Item = GetTime, GetInventoryItemTexture, GetInventoryItemLink, C_Item
 local log = math.log
-local isRetail = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
+
+local isRetail = AddonFactory.isRetail
 local hasKeyring = LE_EXPANSION_LEVEL_CURRENT < LE_EXPANSION_CATACLYSM
-local interfaceVersion = select(4, GetBuildInfo())
+local interfaceVersion = AddonFactory.buildVersion
 local isConsolidatedBank = (interfaceVersion >= 110200)		-- using the new 11.2 bank ?
 
 -- depending on Classic updates: interfaceVersion >= 60200 and interfaceVersion < 110200

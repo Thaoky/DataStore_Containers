@@ -7,9 +7,8 @@ local thisCharacter
 local thisCharacterCooldowns
 
 local DataStore, tonumber, wipe, time, C_Container, C_Bank = DataStore, tonumber, wipe, time, C_Container, C_Bank
-local isRetail = (WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
-local interfaceVersion = select(4, GetBuildInfo())
-local isConsolidatedBank = (interfaceVersion >= 110200)		-- using the new 11.2 bank ?
+local isRetail = AddonFactory.isRetail
+local isConsolidatedBank = (AddonFactory.buildVersion >= 110200)		-- using the new 11.2 bank ?
 
 local enum = DataStore.Enum.ContainerIDs
 local bit64 = LibStub("LibBit64")
