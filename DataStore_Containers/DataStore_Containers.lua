@@ -176,9 +176,11 @@ local function ScanBankSlotsInfo()
 		freeSlots = freeSlots + bit64:GetBits(bag.info, 10, 7)		-- bits 10-16 : number of free slots in this bag
 	end
 
-	local numPurchasedSlots = isMainline 
+	-- GetNumBankSlots does not exist in Classic Forever, and C_Bank may not either => guard both
+	local numPurchasedSlots = isMainline and C_Bank and C_Bank.FetchNumPurchasedBankTabs and Enum.BankType
 		and C_Bank.FetchNumPurchasedBankTabs(Enum.BankType.Character)
-		or GetNumBankSlots()
+		or (GetNumBankSlots and GetNumBankSlots())
+		or 0
 
 	char.bankInfo = numSlots										-- bits 0-9 : num bag slots
 				+ bit64:LeftShift(freeSlots, 10)					-- bits 10-19 : num free slots
